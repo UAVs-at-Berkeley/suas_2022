@@ -11,6 +11,20 @@ import time
 gst_pipeline = "rtspsrc location=rtsp://192.168.144.25:8554/main.264 protocols=tcp latency=0 ! queue ! rtph265depay ! h265parse ! nvv4l2decoder ! nvvidconv ! queue ! appsink"
 
 
+print('Connecting to vehicle on: %s' % connection_string)
+vehicle = connect(ip=connection_string, wait_ready=True, timeout=30, heartbeat_timeout=60, baud=115200)
+# wait_ready: If ``True`` wait until all default attributes have downloaded before the method returns (default is ``None``).
+#             The default attributes to wait on are: :py:attr:`parameters`, :py:attr:`gps_0`, :py:attr:`armed`, :py:attr:`mode`, and :py:attr:`attitude`.
+# timeout: timeout in seconds for wait_ready, aka time to wait for attributes to download from autopilot before throwing exception
+# heartbeat_timeout: time to wait in seconds for heartbeat connection with autopilot
+
+if verbose:
+    vs.print_vehicle_state(vehicle)
+
+cmds = utils.downloadCommands(vehicle)
+
+lastwaypoint = len(cmds) - 1
+
 rtsp_url = "rtsp://192.168.144.25:8554/main.264"
 
 # Open the RTSP stream

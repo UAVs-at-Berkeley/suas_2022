@@ -1,4 +1,3 @@
-import time
 from dronekit import connect, VehicleMode, LocationGlobalRelative, mavutil, Command
 import numpy
 import math
@@ -203,10 +202,11 @@ if show_stream:
     rtmp = RTMP.RTMPSender(rtmp_url)
     rtmp.start()
 fps = int(cap.get(cv2.CAP_PROP_FPS))
+print(fps)
 if fps <= 0 or fps > 120:
     fps = 30  # default fallback
 if vid_mapping:
-    video_maker = cv2.VideoWriter('mappingfull.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (int(cap.get(3)), int(cap.get(4))))
+    video_maker = cv2.VideoWriter('mappingfull2.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (int(cap.get(3)), int(cap.get(4))))
 
 if show_stream:
     ret, frame = cap.read()
@@ -221,88 +221,93 @@ while True:
     if frame.mean() > 10:  # Image is probably dark/gray
         print("Frame is now active")
         break
+    print("Waiting for valid camera frame")
 
 #Wait until vehicle is armable
 counter = 0
 while not vehicle.is_armable:
     # If cannot acheive armable in 120 seconds, reboot the autopilot
-    if counter == 1200:
+    if counter == 120:
         vehicle.reboot()
     print("Waiting for vehicle to initialise...")
     counter += 1
     if show_stream:
-            ret, frame = cap.read()
-            if not ret:
-                continue
-            rtmp.setFrame(frame)
+        ret, frame = cap.read()
+        if not ret:
+            continue
+        rtmp.setFrame(frame)
+    if vid_mapping:
+        ret, frame = cap.read()
+        if not ret:
+            continue
+        video_maker.write(frame)
 
-    if KeyboardInterrupt:
-        if show_stream:
-            rtmp.stop()
-        if vid_mapping:
-            video_maker.release()
-        cap.release()
-        cv2.destroyAllWindows()
+    #if KeyboardInterrupt:
+    #    print("exiting")
+    #    if show_stream:
+    #        rtmp.stop()
+    #    if vid_mapping:
+    #        video_maker.release()
+    #    cap.release()
+    #    cv2.destroyAllWindows()
         # quit
-        exit(0)
-    time.sleep(1)
-
+    #    exit(0)
+    
 while vehicle.mode != VehicleMode("AUTO"):
     print("Currently in manual mode... Waiting for pilot to switch to AUTO")
-    time.sleep(3)
-
+    if vid_mapping:
+        ret, frame = cap.read()
+        if not ret:
+            continue
+        video_maker.write(frame)
+    
 print("Entered AUTO mode")
 ct = 0
-try:
-    while True:
-        nextwaypoint=vehicle.commands.next
-        waypoint = utils.getCurrentWaypoint(vehicle)
-        if nextwaypoint == lastwaypoint:
-            break
-        while nextwaypoint >= 0:
-            ret, frame = cap.read()
-            ct += 1
-            if not ret:
-                continue
-            if ct < 10:
-                continue
-            if show_stream:
-                rtmp.setFrame(frame)
-                cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(waypoint.lat)}_{str(waypoint.lon)}.jpg', frame)
-                rtmp.setFrame(frame)
-                ct = 0
-                if vid_mapping:
-                    video_maker.write(frame)
-                    ct = 0  
-                break
+#try:
+while True:
+    nextwaypoint=vehicle.commands.next
+    waypoint = utils.getCurrentWaypoint(vehicle)
+    if nextwaypoint == lastwaypoint:
+        break
+    while nextwaypoint >= 2:
+        ret, frame = cap.read()
+        ct += 1
+        if not ret:
+            continue
+        if ct < 10:
+            continue
+        if show_stream:
+            rtmp.setFrame(frame)
+            cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(waypoint.lat)}_{str(waypoint.lon)}.jpg', frame)
+            rtmp.setFrame(frame)
+            ct = 0
             if vid_mapping:
                 video_maker.write(frame)
                 ct = 0  
-                break    
+            break
+        if vid_mapping:
+            video_maker.write(frame)
+            ct = 0  
+            break    
 
-        print('Distance to waypoint (%s): %s' % (nextwaypoint, utils.distance_to_current_waypoint(vehicle)))
+    print('Distance to waypoint (%s): %s' % (nextwaypoint, utils.distance_to_current_waypoint(vehicle)))
 
-        time.sleep(1)
-except KeyboardInterrupt:
-    if show_stream:
-        rtmp.stop()
-    if vid_mapping:
-        video_maker.release()
-    cap.release()
-    cv2.destroyAllWindows()
+    #except KeyboardInterrupt:
+#    if show_stream:
+#        rtmp.stop()
+#    if vid_mapping:
+#        video_maker.release()
+#    cap.release()
+#    cv2.destroyAllWindows()
     # quit
-    exit(0)
+#    exit(0)
 
 while vehicle.armed:
     print("Returning to land. Will terminate once landed.")
-    time.sleep(3)
-
-utils.RTL(vehicle)
-
+    
 while vehicle.armed == "ARMED":
     print("Returning to land. Will terminate once landed.")
-    time.sleep(3)
-
+    
 if show_stream:
     rtmp.stop()
 

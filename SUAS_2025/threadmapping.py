@@ -59,23 +59,27 @@ vehicle = connect(ip=connection_string, wait_ready=True, timeout=30, heartbeat_t
 # Thread stop signal
 stop_event = threading.Event()
 
+
+cmds = utils.downloadCommands(vehicle)
+
 # Waypoint indices for which video should be saved (inclusive)
 SAVE_FROM_WAYPOINT = 2
-SAVE_TO_WAYPOINT = 4
+SAVE_TO_WAYPOINT = 7
 
 def should_save_frames():
     """
     Return True if the current waypoint is in the save range.
     """
     current_wp = vehicle.commands.next
-    return SAVE_FROM_WAYPOINT <= current_wp <= SAVE_TO_WAYPOINT
+    #return SAVE_FROM_WAYPOINT <= current_wp <= SAVE_TO_WAYPOINT
+    return True
 
 # === DroneKit Parameter Monitor ===
 def vehicle_param_monitor():
 
     while not stop_event.is_set():
         try:
-            if vehicle.commands.next < vehicle.commands.count:
+            if vehicle.commands.next <= vehicle.commands.count-1:
                 distance = utils.distance_to_current_waypoint(vehicle)
                 print(f"[DroneKit] Distance to next waypoint: {distance:.2f} meters")
         except Exception as e:
@@ -86,7 +90,7 @@ def vehicle_param_monitor():
 # === RTSP Reader and Conditional MP4 Writer ===
 def rtsp_reader_and_saver():
     stream_url = "rtsp://your_rtsp_stream"
-    cap = cv2.VideoCapture(stream_url)
+    cap = cv2.VideoCapture(rtsp_url)
 
     if not cap.isOpened():
         print("[RTSP] Failed to open stream.")
