@@ -2,6 +2,7 @@ import argparse
 import cv2
 import numpy as np
 import math
+import os
 
 # The characteristics we'll be mixing and matching to generate our targets
 
@@ -53,25 +54,30 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate png files of all possible targets falling within a specified range of characteristics.')
     parser.add_argument('-s', '--shape', nargs='+', help='The range of shapes to use.')
     parser.add_argument('-sc', '--shape_color', nargs='+', help='The range of shape colors to use.')
-    parser.add_argument('-a', '--alphanum', required=True, help='The range of alphanumeric symbols to use.')
+    parser.add_argument('-a', '--alphanum', required=False, help='The range of alphanumeric symbols to use.')
     parser.add_argument('-ac', '--alphanum_color', nargs='+', help='The range of alphanumeric colors to use.')
     parser.add_argument('-w', '--write_targets', action='store_true', help='Save the generated targets to pngs.')
+    parser.add_argument('-all', '--all_targets', action='store_true' ,help='Generated all possible targets to pngs.')
     args = parser.parse_args()
     print(args)
 
-    for shape in args.shape:
-        for shape_color in args.shape_color:
-            for alphanum in args.alphanum:
-                for alphanum_color in args.alphanum_color:
-                    # print(shape, shape_color, alphanum, alphanum_color)
-                    # print(target)
-                    if shape_color != alphanum_color:
-                        img = target(shape, shape_color, alphanum, alphanum_color)
-                        if args.write_targets:
-                            cv2.imwrite('./targets/{0}_{1}_{2}_{3}.png'.format(shape, shape_color, alphanum, alphanum_color), img)
-                        else:
-                            cv2.imshow('result', img)
-                            cv2.waitKey(0) 
+    if args.all_targets:
+        os.system('python generate_targets.py -s circle semicircle quartercircle triangle square rectangle trapezoid pentagon hexagon heptagon octagon star cross -sc black gray red blue green yellow purple brown orange -a 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ -ac white black gray red blue green yellow purple brown orange -w')
+
+    else:
+        for shape in args.shape:
+            for shape_color in args.shape_color:
+                for alphanum in args.alphanum:
+                    for alphanum_color in args.alphanum_color:
+                        # print(shape, shape_color, alphanum, alphanum_color)
+                        # print(target)
+                        if shape_color != alphanum_color:
+                            img = target(shape, shape_color, alphanum, alphanum_color)
+                            if args.write_targets:
+                                cv2.imwrite('./targets/{0}_{1}_{2}_{3}.png'.format(shape, shape_color, alphanum, alphanum_color), img)
+                            else:
+                                cv2.imshow('result', img)
+                                cv2.waitKey(0) 
     
 # Loop through all possible combinations of characteristics
 #     for shape in shapes.keys():
