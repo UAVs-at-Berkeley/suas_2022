@@ -14,7 +14,7 @@ def get_colors(img, shape=(600,400), n_colors=2):
     # resizes image to speed up processing
     modified_image = cv2.resize(img, shape, interpolation = cv2.INTER_AREA)
     modified_image = modified_image.reshape(modified_image.shape[0]*modified_image.shape[1], 3)
-    clf = KMeans(n_clusters = n_colors)
+    clf = KMeans(n_clusters = n_colors, n_init='auto')
     labels = clf.fit_predict(modified_image)
     counts = Counter(labels)
     center_colors = [list(map(int, lst)) for lst in clf.cluster_centers_]
