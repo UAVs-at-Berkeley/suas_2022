@@ -6,7 +6,7 @@ import os
 # python3 data_parser.py 2 0.520686 0.597917 0.0579196 0.0708333 0.313508
 
 def save(cls, x, y, w, h, conf=''):
-    dir_path = "output"
+    dir_path = "output-parser"
     file_name = "test.json"
     file_path = os.path.join(dir_path, file_name)
 

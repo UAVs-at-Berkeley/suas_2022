@@ -1,0 +1,6 @@
+/datasets/*
+/images/*
+/tests/*
+__pycache__/generate_targets.cpython-310.pyc
+.DS_Store
+yolov5
