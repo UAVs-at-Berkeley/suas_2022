@@ -18,12 +18,15 @@ if __name__ == '__main__':
     main_path = "C:/Users/Surya/SuryaMain/PythonProjects/suas_2022"
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--image", help="path to the image")
-    ap.add_argument("--n_colors", type=int, help="number of different colors on image")
+    ap.add_argument("--n_colors", type=int, help="number of different colors on image", required = False)
     args = vars(ap.parse_args())
 
     # load the image
     test_image = get_image(args['image'])
-    n_colors = args['n_colors']
+    if 'n_colors' in args.keys():
+        n_colors = args['n_colors']
+    else:
+        n_colors = 2
     shape = (500, 500)
     labels, ordered_colors = get_colors(test_image, shape, n_colors=n_colors)
 
