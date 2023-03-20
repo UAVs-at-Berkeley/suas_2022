@@ -1,72 +1,430 @@
+from collections import deque
 import numpy as np
+import argparse
+import imutils
 import cv2
-from sklearn.cluster import KMeans
-from collections import Counter
+import urllib 
+
+"""lower = {'red':(166, 84, 141), 'green':(66, 122, 129), 'blue':(97, 100, 117), 'yellow':(23, 59, 119), 'orange':(0, 50, 80)} 
+upper = {'red':(186,255,255), 'green':(86,255,255), 'blue':(117,255,255), 'yellow':(54,255,255), 'orange':(20,255,255)}
+ 
+
+colors = {'red':(0,0,255), 'green':(0,255,0), 'blue':(255,0,0), 'yellow':(0, 255, 217), 'orange':(0,140,255)}
+ 
+def color_det(path):
+    camera = cv2.VideoCapture(0)
+
+    while True:
+
+        (grabbed, frame) = camera.read()
+
+        if not grabbed:
+            break
+
+        image = cv2.imread(path)
+        
+        frame = imutils.resize(frame, width=900)
+        blurred = cv2.GaussianBlur(frame, (11, 11), 0)
+
+        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+
+        for key, value in upper.items():
+        
+            kernel = np.ones((9,9),np.uint8)
+            mask = cv2.inRange(hsv, lower[key], upper[key])
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+                
+        
+            cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+                cv2.CHAIN_APPROX_SIMPLE)[-2]
+            center = None
+        
 
 
-def get_image(image_path):
-    image = cv2.imread(image_path)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    return image
+            if len(cnts) > 0:
+                
+                c = max(cnts, key=cv2.contourArea)
+                ((x, y), radius) = cv2.minEnclosingCircle(c)
+                M = cv2.moments(c)
+                center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+        
 
-# number_of_colors parameter tells cluster algorithm how many colors to search for 
-# ideal img would be cropped to have two primary colors (color of shape and alphanumeric)
-def get_colors(img, number_of_colors):
-    # resizes image to speed up processing
-    modified_image = cv2.resize(img, (600, 400), interpolation = cv2.INTER_AREA)
-    modified_image = modified_image.reshape(modified_image.shape[0]*modified_image.shape[1], 3)
-    clf = KMeans(n_clusters = number_of_colors)
-    labels = clf.fit_predict(modified_image)
-    counts = Counter(labels)
-    center_colors = [list(map(int, lst)) for lst in clf.cluster_centers_]
-    # ordered_colors contains the rgb values in order of most frequent to least
-    ordered_colors = [center_colors[i] for i in counts.keys()]
-    return ordered_colors
+                if radius > 0.5:
+                
+                    cv2.circle(frame, (int(x), int(y)), int(radius), colors[key], 5)
+                    cv2.putText(frame, key + "color", (int(x-radius),int(y-radius)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,colors[key],2)
+        
+        cv2.imshow("Image", frame)
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            camera.release()
+            cv2.destroyAllWindows()
+            break"""
 
-img = cv2.imread('./img_simulator/winter_small_10.jpg')
-crop = img[455:500, 625:675]
-# crop = img[461:495, 632:665]
+def color_det(path):
 
-# Crop settings for other images
-# img = cv2.imread('./img_simulator/shrubbery_small_34.jpg')
-# crop = img[440:480, 275:315]
-# img = cv2.imread('./img_simulator/meadow_20.jpg')
-# crop = img[90:140, 310:360]
+    # Capturing video through webcam
+    webcam = cv2.VideoCapture(0)
+    
+    # Start a while loop
+    while(1):
 
-img = crop
-# img = cv2.GaussianBlur(img, (7, 7), 0)
-cv2.imshow('test', img)
-cv2.waitKey(0)
-# exit()
+        max_contours = dict.fromkeys(['max1', 'max2'], {'contour': None, 'color': 'black', 'area': 0})
+        
+        # Reading the video from the
+        # webcam in image frames
+        _, imageFrame = webcam.read()
 
-# Set K means parameters and run the algorithm
-img = np.float32(img)
-img_stretched = img.reshape((-1, 3))
-criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-K = 2
-ret, label, center = cv2.kmeans(img_stretched, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-# print(center)
-center = np.uint8(center)
-res = center[label.flatten()]
-res2 = res.reshape((img.shape))
+        img = cv2.imread(path)
+        img = imutils.resize(img, width=700)
+        # Convert the imageFrame in 
+        # BGR(RGB color space) to 
+        # HSV(hue-saturation-value)
+        # color space
+        hsvFrame = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-cv2.imshow('res2', res2)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+        """{'black': [[180, 255, 30], [0, 0, 0]],
+              'white': [[180, 18, 255], [0, 0, 231]],
+              'brown': [[22, 255, 200], [10, 70, 20]],
+              'red1': [[180, 255, 255], [159, 50, 70]],
+              'red2': [[9, 255, 255], [0, 50, 70]],
+              'green': [[89, 255, 255], [36, 50, 70]],
+              'blue': [[128, 255, 255], [90, 50, 70]],
+              'yellow': [[35, 255, 255], [25, 50, 70]],
+              'purple': [[158, 255, 255], [129, 50, 70]],
+              'orange': [[24, 255, 255], [10, 50, 70]],
+              'gray': [[180, 18, 230], [0, 0, 40]]}"""
 
-# Retrieve the color corresponding to the most common label in the image.
-# We assume that this color cluster corresponds to the shape.
-unique_labels, count = np.unique(label, return_counts=True)
-shape_color = center[unique_labels[np.argmax(count)]]
-# Convert shape color to HSV for easier classification
-print(cv2.cvtColor(np.array([[shape_color]]), cv2.COLOR_BGR2HSV))
+        # Set range for black color and 
+        # define mask
+        black_lower = np.array([0, 0, 0], np.uint8)
+        black_upper = np.array([180, 255, 30], np.uint8)
+        black_mask = cv2.inRange(hsvFrame, black_lower, black_upper)
 
-# Jason: add code to
-# 1.) floodfill the outside of res2 with the shape color (I recommend you use the pixel at (0, 0)
-# as a starting point and if that's already colored, loop over the image array until you find one that isn't,
-# 2.) Conditionally overlay the floodfilled res2 over crop, and
-# 3.) Run K-means with K=2 to get text color.
-# Once that's done, you're welcome to try sorting the shape_color list into an actual color: you can find the
-# list of valid colors in /img_simulator/generate_targets.py. Otherwise, I can take care of it.
+        # Set range for white color and 
+        # define mask
+        white_lower = np.array([0, 0, 231], np.uint8)
+        white_upper = np.array([180, 18, 255], np.uint8)
+        white_mask = cv2.inRange(hsvFrame, white_lower, white_upper)
+
+        # Set range for brown color and
+        # define mask
+        brown_lower = np.array([10, 70, 20], np.uint8)
+        brown_upper = np.array([22, 255, 200], np.uint8)
+        brown_mask = cv2.inRange(hsvFrame, brown_lower, brown_upper)
+
+        # Set range for yellow color and 
+        # define mask
+        yellow_lower = np.array([25, 50, 90], np.uint8)
+        yellow_upper = np.array([35, 255, 255], np.uint8)
+        yellow_mask = cv2.inRange(hsvFrame, yellow_lower, yellow_upper)
+
+        # Set range for purple color and 
+        # define mask
+        purple_lower = np.array([129, 50, 70], np.uint8)
+        purple_upper = np.array([158, 255, 255], np.uint8)
+        purple_mask = cv2.inRange(hsvFrame, purple_lower, purple_upper)
+
+        # Set range for orange color and 
+        # define mask
+        orange_lower = np.array([10, 50, 90], np.uint8)
+        orange_upper = np.array([24, 255, 255], np.uint8)
+        orange_mask = cv2.inRange(hsvFrame, orange_lower, orange_upper)
+
+        # Set range for gray color and 
+        # define mask
+        gray_lower = np.array([0, 0, 40], np.uint8)
+        gray_upper = np.array([180, 18, 230], np.uint8)
+        gray_mask = cv2.inRange(hsvFrame, gray_lower, gray_upper)
+    
+        # Set range for red color and 
+        # define mask
+        red_lower = np.array([0, 50, 70], np.uint8)
+        red_upper = np.array([9, 255, 255], np.uint8)
+        red_mask = cv2.inRange(hsvFrame, red_lower, red_upper)
+    
+        # Set range for green color and 
+        # define mask
+        green_lower = np.array([36, 50, 70], np.uint8)
+        green_upper = np.array([89, 255, 255], np.uint8)
+        green_mask = cv2.inRange(hsvFrame, green_lower, green_upper)
+    
+        # Set range for blue color and
+        # define mask
+        blue_lower = np.array([90, 50, 70], np.uint8)
+        blue_upper = np.array([128, 255, 255], np.uint8)
+        blue_mask = cv2.inRange(hsvFrame, blue_lower, blue_upper)
+        
+        # Morphological Transform, Dilation
+        # for each color and bitwise_and operator
+        # between imageFrame and mask determines
+        # to detect only that particular color
+        kernal = np.ones((5, 5), "uint8")
+        
+        # For red color
+        red_mask = cv2.dilate(red_mask, kernal)
+        res_red = cv2.bitwise_and(img, img, 
+                                mask = red_mask)
+        
+        # For green color
+        green_mask = cv2.dilate(green_mask, kernal)
+        res_green = cv2.bitwise_and(img, img,
+                                    mask = green_mask)
+        
+        # For blue color
+        blue_mask = cv2.dilate(blue_mask, kernal)
+        res_blue = cv2.bitwise_and(img, img,
+                                mask = blue_mask)
+        
+        # For black color
+        black_mask = cv2.dilate(black_mask, kernal)
+        res_black = cv2.bitwise_and(img, img, 
+                                mask = black_mask)
+        
+        # For white color
+        white_mask = cv2.dilate(white_mask, kernal)
+        res_white = cv2.bitwise_and(img, img,
+                                    mask = white_mask)
+        
+        # For brown color
+        brown_mask = cv2.dilate(brown_mask, kernal)
+        res_brown = cv2.bitwise_and(img, img,
+                                mask = brown_mask)
+        
+        # For yellow color
+        yellow_mask = cv2.dilate(yellow_mask, kernal)
+        res_yellow = cv2.bitwise_and(img, img, 
+                                mask = yellow_mask)
+        
+        # For orange color
+        orange_mask = cv2.dilate(orange_mask, kernal)
+        res_orange = cv2.bitwise_and(img, img,
+                                    mask = orange_mask)
+        
+        # For purple color
+        purple_mask = cv2.dilate(purple_mask, kernal)
+        res_purple = cv2.bitwise_and(img, img,
+                                mask = purple_mask)
+        
+        # For gray color
+        gray_mask = cv2.dilate(gray_mask, kernal)
+        res_gray = cv2.bitwise_and(img, img,
+                                mask = gray_mask)
+        
+        color_masks = {'Red': red_mask, 'Green': green_mask, 'Blue': blue_mask, 'Black': black_mask, 'White': white_mask, 'Brown': brown_mask, 'Yellow': yellow_mask, 'Orange': orange_mask, 'Purple': purple_mask, 'Gray': gray_mask}
+        
+        # Creating contour to track black color
+        contours, hierarchy = cv2.findContours(black_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_black = (None, 0)
+        
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_black[1]):
+                max_area_black = (contour, area)
+                
+        if max_area_black[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_black[0], 'color': 'Black', 'area': max_area_black[1]}
+        elif max_area_black[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_black[0], 'color': 'Black', 'area': max_area_black[1]}
+                
+        # Creating contour to track white color
+        contours, hierarchy = cv2.findContours(white_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_white = (None, 0)
+        
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_white[1]):
+                max_area_white = (contour, area) 
+                
+        if max_area_white[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_white[0], 'color': 'White', 'area': max_area_white[1]}
+        elif max_area_white[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_white[0], 'color': 'White', 'area': max_area_white[1]}
+
+        # Creating contour to track brown color
+        contours, hierarchy = cv2.findContours(brown_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_brown = (None, 0)
+        
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_brown[1]):
+                max_area_brown = (contour, area)
+                
+        if max_area_brown[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_brown[0], 'color': 'Brown', 'area': max_area_brown[1]}
+        elif max_area_brown[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_brown[0], 'color': 'Brown', 'area': max_area_brown[1]}
+                
+        # Creating contour to track yellow color
+        contours, hierarchy = cv2.findContours(yellow_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_yellow = (None, 0)
+
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_yellow[1]):
+                max_area_yellow = (contour, area)
+                
+        if max_area_yellow[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_yellow[0], 'color': 'Yellow', 'area': max_area_yellow[1]}
+        elif max_area_yellow[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_yellow[0], 'color': 'Yellow', 'area': max_area_yellow[1]}
+                
+        # Creating contour to track purple color
+        contours, hierarchy = cv2.findContours(purple_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_purple = (None, 0)
+
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_purple[1]):
+                max_area_purple = (contour, area)
+                
+        if max_area_purple[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_purple[0], 'color': 'Purple', 'area': max_area_purple[1]}
+        elif max_area_purple[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_purple[0], 'color': 'Purple', 'area': max_area_purple[1]}
+    
+        # Creating contour to track orange color
+        contours, hierarchy = cv2.findContours(orange_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_orange = (None, 0)
+        
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_orange[1]):
+                max_area_orange = (contour, area)
+                
+        if max_area_orange[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_orange[0], 'color': 'Orange', 'area': max_area_orange[1]}
+        elif max_area_orange[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_orange[0], 'color': 'Orange', 'area': max_area_orange[1]}
+
+        # Creating contour to track gray color
+        contours, hierarchy = cv2.findContours(gray_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_gray = (None, 0)
+        
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_gray[1]):
+                max_area_gray = (contour, area)
+                
+        if max_area_gray[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_gray[0], 'color': 'Gray', 'area': max_area_gray[1]}
+        elif max_area_gray[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_gray[0], 'color': 'Gray', 'area': max_area_gray[1]}
+
+        # Creating contour to track red color
+        contours, hierarchy = cv2.findContours(red_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_red = (None, 0)
+        
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_red[1]):
+                max_area_red = (contour, area)
+                
+        if max_area_red[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_red[0], 'color': 'Red', 'area': max_area_red[1]}
+        elif max_area_red[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_red[0], 'color': 'Red', 'area': max_area_red[1]}
+    
+        # Creating contour to track green color
+        contours, hierarchy = cv2.findContours(green_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_green = (None, 0)
+        
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_green[1]):
+                max_area_green = (contour, area)
+                
+        if max_area_green[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_green[0], 'color': 'Green', 'area': max_area_green[1]}
+        elif max_area_green[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_green[0], 'color': 'Green', 'area': max_area_green[1]}
+    
+        # Creating contour to track blue color
+        contours, hierarchy = cv2.findContours(blue_mask,
+                                            cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+        
+        max_area_blue = (None, 0)
+
+        for contour in list(contours):
+            area = cv2.contourArea(contour)
+            if(area > max_area_blue[1]):
+                max_area_blue = (contour, area)
+                
+        if max_area_blue[1] > max_contours['max1']['area']:
+            max_contours['max2'] = max_contours['max1']
+            max_contours['max1'] = {'contour': max_area_blue[0], 'color': 'Blue', 'area': max_area_blue[1]}
+        elif max_area_blue[1] > max_contours['max2']['area']:
+            max_contours['max2'] = {'contour': max_area_blue[0], 'color': 'Blue', 'area': max_area_blue[1]}
 
 
+        x, y, w, h = cv2.boundingRect(max_contours['max1']['contour'])
+        img = cv2.rectangle(img, (x, y),
+                                (x + w, y + h),
+                                (0, 0, 0), 2)
+        
+        cv2.putText(img, f"{max_contours['max1']['color']} Colour", (x, y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.0, (0, 0, 0))
+        
+        x, y, w, h = cv2.boundingRect(max_contours['max2']['contour'])
+        img = cv2.rectangle(img, (x, y),
+                                (x + w, y + h),
+                                (0, 0, 0), 2)
+        
+        cv2.putText(img, f"{max_contours['max2']['color']} Colour", (x, y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.0, (0, 0, 0))
+                
+        # Program Termination
+        cv2.imshow("Multiple Color Detection in Real-Time", img)
+        cv2.imshow(f"{max_contours['max1']['color']} Mask", color_masks[max_contours['max1']['color']])
+        cv2.imshow(f"{max_contours['max2']['color']} Mask", color_masks[max_contours['max2']['color']])
+
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            print(f"Max colors are {max_contours['max1']['color']} and {max_contours['max2']['color']}")
+            webcam.release()
+            cv2.destroyAllWindows()
+            break
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-ip', '--img_path', type=str, help='The path of the image you want to run color detection on.')
+    args = parser.parse_args()
+    color_det(args.img_path)
