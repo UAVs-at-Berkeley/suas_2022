@@ -73,14 +73,7 @@ def arm_and_takeoff(aTargetAltitude):
 print("Set default/target airspeed to 3")
 vehicle.airspeed = 3
 
-msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 10, 2500, 0, 0, 0, 0, 0)
-
-vehicle.send_mavlink(msg)
-
-time.sleep(10)
-
-msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 10, 1800, 0, 0, 0, 0, 0)
-
+msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 10, 2600, 0, 0, 0, 0, 0)
 vehicle.send_mavlink(msg)
 
 """print("Going towards first point for 30 seconds ...")

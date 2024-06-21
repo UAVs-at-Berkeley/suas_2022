@@ -13,6 +13,8 @@ from dronekit import connect, VehicleMode, LocationGlobalRelative, LocationGloba
 import time
 import math
 from pymavlink import mavutil
+import cv2
+from ultralytics import YOLO
 
 
 #Set up option parsing to get connection string
@@ -23,6 +25,90 @@ parser.add_argument('--connect',
 args = parser.parse_args()
 
 connection_string = args.connect
+
+model = YOLO("yolov8n.pt")
+classNames = [
+    "person",
+    "bicycle",
+    "car",
+    "motorbike",
+    "aeroplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "sofa",
+    "pottedplant",
+    "bed",
+    "diningtable",
+    "toilet",
+    "tvmonitor",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
+]
 
 # Connect to the Vehicle
 print('Connecting to vehicle on: %s' % connection_string)
@@ -118,14 +204,14 @@ def adds_square_mission(aLocation, aSize):
     #Define the four MAV_CMD_NAV_WAYPOINT locations and add the commands
     point1 = get_location_metres(aLocation, aSize, -aSize)
     point2 = get_location_metres(aLocation, aSize, aSize)
-    point3 = get_location_metres(aLocation, -aSize, aSize)
-    point4 = get_location_metres(aLocation, -aSize, -aSize)
-    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0, point1.lat, point1.lon, 25))
-    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0, point2.lat, point2.lon, 25))
-    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0, point3.lat, point3.lon, 25))
-    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0, point4.lat, point4.lon, 25))
+    point3 = get_location_metres(aLocation, 0, aSize)
+    point4 = get_location_metres(aLocation, 0, -aSize)
+    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 15, 5, 0, 0, point1.lat, point1.lon, 25))
+    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 15, 5, 0, 0, point2.lat, point2.lon, 25))
+    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 15, 5, 0, 0, point3.lat, point3.lon, 25))
+    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 15, 5, 0, 0, point4.lat, point4.lon, 25))
     #add dummy waypoint "5" at point 4 (lets us know when have reached destination)
-    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0, point4.lat, point4.lon, 25))    
+    cmds.add(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 15, 5, 0, 0, point4.lat, point4.lon, 25))    
 
     print(" Upload new commands to vehicle")
     cmds.upload()
@@ -187,9 +273,53 @@ vehicle.mode = VehicleMode("AUTO")
 
 while True:
     nextwaypoint=vehicle.commands.next
-    print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
+    camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=1920,height=1080,framerate=59/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink'
+    video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
+    if video_capture.isOpened():
+        ret_val, frame = video_capture.read()
+        results = model(frame, stream=True)
+        for r in results:
+            boxes = r.boxes
 
-    if nextwaypoint!=0: # When not first waypoint, check the the camera for an object
+            for box in boxes:
+                # bounding box
+                x1, y1, x2, y2 = box.xyxy[0]
+                x1, y1, x2, y2 = (
+                    int(x1),
+                    int(y1),
+                    int(x2),
+                    int(y2),
+                )  # convert to int values
+
+                # put box in cam
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
+                # class name
+                cls = int(box.cls[0])
+                print("Class name -->", classNames[cls])
+
+                if classNames[cls]=="person" and nextwaypoint != 1: # When not first waypoint, check the the camera for an object
+                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 9, 2600, 0, 0, 0, 0, 0)
+                    vehicle.send_mavlink(msg)
+
+                # object details
+                org = [x1, y1]
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                fontScale = 1
+                color = (255, 0, 0)
+                thickness = 2
+
+                cv2.putText(
+                    frame, classNames[cls], org, font, fontScale, color, thickness
+                )
+        # Check to see if the user closed the window
+        # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
+        # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
+        #cv2.imshow(window_title, frame)
+            
+    else:
+        print("Error: Unable to open camera")
+
+    print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
   
     if nextwaypoint==3: #Skip to next waypoint
         print('Skipping to Waypoint 5 when reach waypoint 3')
@@ -201,6 +331,7 @@ while True:
 
 print('Return to launch')
 vehicle.mode = VehicleMode("RTL")
+video_capture.release()
 
 
 #Close vehicle object before exiting script
