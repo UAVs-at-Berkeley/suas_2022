@@ -45,7 +45,7 @@ airfield_MSL = 43.2816
 
 last_searched = 11
 
-lastwaypoint = 1
+lastwaypoint = 11
 
 drop_count = 0
 
@@ -258,6 +258,25 @@ while True:
                     # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
                     # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
                     cv2.imshow(window_title, frame)
+
+                    if model.names[cls]=="person":
+                        last_searched = nextwaypoint
+                        vehicle.mode = VehicleMode("GUIDED")
+                        print(vehicle.mode)
+                        object_point = vehicle.location.global_frame
+                        vehicle.simple_goto(object_point)
+                        x=0
+                        while(get_distance_metres(vehicle.location.global_frame, object_point) > 1):
+                            x += 1
+                        msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 10, 0, 0, 0, 0, 0, 0) #Pause command
+                        vehicle.send_mavlink(msg)
+                        msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 9, 2600, 0, 0, 0, 0, 0)
+                        vehicle.send_mavlink(msg)
+                        msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 2, 0, 0, 0, 0, 0, 0) #Pause command for 2 seconds
+                        vehicle.send_mavlink(msg)
+                        drop_count += 1
+                        vehicle.commands.next = 0
+                        vehicle.mode = VehicleMode("AUTO")
                         
                     keyCode = cv2.waitKey(30) & 0xFF
                     # Stop the program on the ESC key or 'q'
