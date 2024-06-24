@@ -9,6 +9,8 @@ import cv2
 
 from ultralytics import YOLO
 
+from getkey import getkey
+
 import numpy as np
 import time
 
@@ -137,12 +139,12 @@ def show_camera():
 
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
     print(gstreamer_pipeline(flip_method=0))
-    camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=1920,height=1080,framerate=59/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink'
+    camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
     video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
     count = 0
     if video_capture.isOpened():
         try:
-            keyCode = cv2.waitKey(30) & 0xFF
+            keyCode = getkey(blocking=False)
             while True:
                 count +=1
                 ret_val, frame = video_capture.read()
@@ -179,13 +181,12 @@ def show_camera():
                 # Check to see if the user closed the window
                 # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
                 # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
-
                  
                 
                 # Stop the program on the ESC key or 'q'
-                time.sleep(10)
+                time.sleep(0.5)
                 cv2.imwrite("Image_"+str(count)+".jpg", frame)
-                if keyCode == 27 or keyCode == ord('q'):
+                if keyCode == "q":
                     break
         finally:
             video_capture.release()
