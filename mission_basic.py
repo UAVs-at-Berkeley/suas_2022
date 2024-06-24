@@ -267,12 +267,16 @@ while True:
                         confidence += 1
                         if confidence >= 5:
                             vehicle.mode = VehicleMode("GUIDED")
+                            while not vehicle.mode.name=='GUIDED':
+                                time.sleep(1)
+                                print("waiting for mode change...")
                             print(vehicle.mode)
                             object_point = vehicle.location.global_frame
                             vehicle.simple_goto(object_point)
                             x=0
                             while(get_distance_metres(vehicle.location.global_frame, object_point) > 1):
-                                x += 1
+                                time.sleep(1)
+                                print("Approaching Target")
                             msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 10, 0, 0, 0, 0, 0, 0) #Pause command
                             vehicle.send_mavlink(msg)
                             time.sleep(10)
@@ -284,6 +288,9 @@ while True:
                             drop_count += 1
                             vehicle.commands.next = 0
                             vehicle.mode = VehicleMode("AUTO")
+                            while not vehicle.mode.name=='AUTO':
+                                time.sleep(1)
+                                print("Waiting for mode change back to AUTO..."                            
                         
                     keyCode = cv2.waitKey(30) & 0xFF
                     # Stop the program on the ESC key or 'q'
