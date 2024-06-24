@@ -1,1 +1,0 @@
-#Algorithm to crop or zoom into image from camera to magnify objects of interest for classification
