@@ -212,14 +212,16 @@ vehicle.mode = VehicleMode("AUTO")
 #   distance to the next waypoint.
 while True:
     nextwaypoint=vehicle.commands.next
+    confidence = 0
     if nextwaypoint<10:
         camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
         video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
         if video_capture.isOpened():
             try:
-                while True:
+                while confidence < 5:
                     ret_val, frame = video_capture.read()
                     results = model(frame, stream=True)
+                    inframe = []
                     for r in results:
                         boxes = r.boxes
 
@@ -241,6 +243,7 @@ while True:
                             
                             #class name
                             cls = int(box.cls[0])
+                            inframe.append(model.names[cls])
                             print("Class name -->", model.names[cls])
                             cv2.imwrite("Image_"+ model.names[cls] + ".jpg", roi)
 
@@ -252,15 +255,16 @@ while True:
                             thickness = 2
 
                             cv2.putText(
-                                frame, classNames[cls], org, font, fontScale, color, thickness
+                                frame, model.names[cls], org, font, fontScale, color, thickness
                             )
                     # Check to see if the user closed the window
                     # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
                     # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
                     cv2.imshow(window_title, frame)
 
-                    if model.names[cls]=="person":
+                    if "person" in inframe:
                         last_searched = nextwaypoint
+                        confidence += 1
                         vehicle.mode = VehicleMode("GUIDED")
                         print(vehicle.mode)
                         object_point = vehicle.location.global_frame
@@ -282,6 +286,7 @@ while True:
                     # Stop the program on the ESC key or 'q'
                     if keyCode == 27 or keyCode == ord('q'):
                         break
+                    time.sleep(1)
             finally:
                 video_capture.release()
                 cv2.destroyAllWindows()
