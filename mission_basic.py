@@ -271,6 +271,8 @@ vehicle.mode = VehicleMode("AUTO")
 # Uses distance_to_current_waypoint(), a convenience function for finding the 
 #   distance to the next waypoint.
 
+count = 0
+
 while True:
     nextwaypoint=vehicle.commands.next
     camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=1920,height=1080,framerate=59/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink'
@@ -297,7 +299,8 @@ while True:
                 cls = int(box.cls[0])
                 print("Class name -->", classNames[cls])
 
-                if classNames[cls]=="person" and nextwaypoint != 1: # When not first waypoint, check the the camera for an object
+                if classNames[cls]=="person" and nextwaypoint != 1 and count == 0:# When not first waypoint, check the the camera for an object
+                    count+=1
                     msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 9, 2600, 0, 0, 0, 0, 0)
                     vehicle.send_mavlink(msg)
 
