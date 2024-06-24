@@ -1,8 +1,10 @@
 import argparse
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 import math
 import random
+import os
 
 import generate_targets
 
@@ -20,6 +22,22 @@ def place_target(target_img, orientation, position, scale):
 
     # Target placing
     field = alpha_blend(transformed_img, transformed_alpha, position)
+
+def em_place_target(target_img, orientation, position, scale):
+    # Target preprocessing
+    alpha_channel = target_img[:, :, 2]  # Since add_noise requites an HSV conversion that doesn't preserve alpha channel, we have to save it first
+    transformed_img = affine_transform(target_img, orientations[orientation], scale)
+    transformed_alpha = affine_transform(alpha_channel, orientations[orientation], scale)
+
+    # Target placing
+    field = em_place(transformed_img, transformed_alpha, position)
+
+def em_place(img, alpha_channel, offset):
+    for row in range(img.shape[0]):
+        for col in range(img.shape[1]):
+            if alpha_channel[row, col] > 0:
+                field[row + offset[0], col + offset[1], :3] = img[row, col]
+    return field
 
 
 # Compute the affine transformed image from a given rotation and scale
@@ -64,6 +82,10 @@ def blur_edges(field):
     blurred_edges = np.where(field_mask==0, field_blur, field)
     return blurred_edges
 
+def blank(n):
+    img = np.zeros((n, n, 4), np.uint8)
+    return img
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -75,10 +97,15 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--clip_maximum', type=float, default=0, help='The greatest proportion of a target\'s width/height that may be out of bounds. Zero by default, but set higher to allow clipping.')
     args = parser.parse_args()
 
-    field_name = 'maryland_test'
+    field_name = 'runway'
     field = cv2.imread('./{0}.png'.format(field_name))
+    print(field.shape)
 
-    seed = 50
+    em_scale_variance = args.scale_variance
+    em_scale_target = 0.3
+    em_clip_maximum = 0
+
+    seed = 254
     random.seed(seed) # Setting the seed insures replicability of results
 
     for i in range(args.num_targets):
@@ -90,9 +117,29 @@ if __name__ == '__main__':
         orientation = random.choice(list(orientations.keys()))
         scale = random.uniform((1-args.scale_variance)*args.scale_target, (1+args.scale_variance)*args.scale_target)
         pos = (round(random.uniform(-args.clip_maximum*100*scale, field.shape[0]-(1-args.clip_maximum)*100*scale)),
-		round(random.uniform(-args.clip_maximum*100*scale, field.shape[1]-(1-args.clip_maximum)*100*scale)))
+        round(random.uniform(-args.clip_maximum*100*scale, field.shape[1]-(1-args.clip_maximum)*100*scale)))
         place_target(generate_targets.target(shape, shape_color, alphanum, alphanum_color), orientation, pos, scale)
+    emergent = random.choice([x for x in os.listdir("mannequins")
+               if os.path.isfile(os.path.join("mannequins", x))])
+    emer = cv2.imread("./mannequins/"+emergent)
+    emer = cv2.resize (emer, (100,100))
+    print(emergent)
+    print(emer.shape)
+
+    tmp = cv2.cvtColor(emer, cv2.COLOR_BGR2GRAY)
+    _, alpha = cv2.threshold(tmp,254,255,cv2.THRESH_TOZERO_INV)
+    b, g, r = cv2.split(emer)
+
+    rgba = [b, g, r, alpha]
+
+    dst = cv2.merge(rgba,4)
+
+    em_orientation = random.choice(list(orientations.keys()))
+    em_scale = random.uniform((1-em_scale_variance)*em_scale_target, (1+em_scale_variance)*em_scale_target)
+    em_pos = (round(random.uniform(-em_clip_maximum*100*em_scale, field.shape[0]-(1-em_clip_maximum)*100*em_scale)),
+    round(random.uniform(-em_clip_maximum*100*em_scale, field.shape[1]-(1-em_clip_maximum)*100*em_scale)))
+    place_target(dst, em_orientation, em_pos, em_scale)
+    #em_place_target(emer, em_orientation, em_pos, em_scale)
     field = blur_edges(field)
-    # place_target(generate_targets.target('circle', 'red', 'V', 'brown'), 'SE', (190, 300), 0.25)
-    
+
     cv2.imwrite('./tests/{0}_{1}.png'.format(field_name, seed), field)
