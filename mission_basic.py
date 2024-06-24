@@ -197,14 +197,20 @@ def adds_wypt_mission():
 
 print('Create a new mission (for current location)')
 
-adds_wypt_mission()
+#adds_wypt_mission()
+
+cmds = vehicle.commands
+cmds.download()
+cmds.wait_ready()
+if not vehicle.home_location:
+    print("Waiting for home location ...")
 
 print("Starting mission")
 # Reset mission set to first (0) waypoint
 vehicle.commands.next=0
 
 # Set mode to AUTO to start mission
-vehicle.mode = VehicleMode("AUTO")
+#vehicle.mode = VehicleMode("AUTO")
 
 # Monitor mission. 
 # Demonstrates getting and setting the command number 
@@ -260,7 +266,7 @@ while True:
                     # Check to see if the user closed the window
                     # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
                     # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
-                    cv2.imshow(window_title, frame)
+                    #cv2.imshow(window_title, frame)
 
                     if "person" in inframe:
                         last_searched = nextwaypoint
@@ -290,16 +296,16 @@ while True:
                             vehicle.mode = VehicleMode("AUTO")
                             while not vehicle.mode.name=='AUTO':
                                 time.sleep(1)
-                                print("Waiting for mode change back to AUTO..."                            
+                                print("Waiting for mode change back to AUTO...")                            
                         
-                    keyCode = cv2.waitKey(30) & 0xFF
+                    #keyCode = cv2.waitKey(30) & 0xFF
                     # Stop the program on the ESC key or 'q'
-                    if keyCode == 27 or keyCode == ord('q'):
-                        break
+                    #if keyCode == 27 or keyCode == ord('q'):
+                    #    break
                     time.sleep(1)
             finally:
                 video_capture.release()
-                cv2.destroyAllWindows()
+                #cv2.destroyAllWindows()
         else:
             print("Error: Unable to open camera")
     print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))

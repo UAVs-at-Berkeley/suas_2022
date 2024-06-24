@@ -1,11 +1,36 @@
-from __future__ import print_function
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
-from dronekit import connect, VehicleMode, LocationGlobalRelative, LocationGlobal, Command
+"""
+© Copyright 2015-2016, 3D Robotics.
+mission_basic.py: Example demonstrating basic mission operations including creating, clearing and monitoring missions.
+
+Full documentation is provided at https://dronekit-python.readthedocs.io/en/latest/examples/mission_basic.html
+"""
+# MIT License
+# Copyright (c) 2019-2022 JetsonHacks
+
+# Using a CSI camera (such as the Raspberry Pi Version 2) connected to a
+# NVIDIA Jetson Nano Developer Kit using OpenCV
+# Drivers for the camera and OpenCV are included in the base image
+
+import cv2
+
 import time
 import math
-from pymavlink import mavutil
-import cv2
+
+import numpy as np
+
 from ultralytics import YOLO
+from pymavlink import mavutil
+from dronekit import connect, VehicleMode, LocationGlobalRelative, LocationGlobal, Command
+
+""" 
+gstreamer_pipeline returns a GStreamer pipeline for capturing from the CSI camera
+Flip the image by setting the flip_method (most common values: 0 and 2)
+display_width and display_height determine the size of each camera pane in the window on the screen
+Default 1920x1080 displayd in a 1/4 size window
+"""
 
 import argparse  
 parser = argparse.ArgumentParser(description='Demonstrates basic mission operations.')
@@ -20,7 +45,7 @@ airfield_MSL = 43.2816
 
 last_searched = 11
 
-lastwaypoint = 45
+lastwaypoint = 7
 
 drop_count = 0
 
@@ -74,35 +99,12 @@ classNames = [
     "pentagon",
 
 ]
+window_title = "CSI Camera"
 
-# Connect to the Vehicle
 print('Connecting to vehicle on: %s' % connection_string)
 vehicle = connect(connection_string, wait_ready=True)
 
-vehicle.airspeed = 5
-
-def get_location_metres(original_location, dNorth, dEast):
-    """
-    Returns a LocationGlobal object containing the latitude/longitude `dNorth` and `dEast` metres from the 
-    specified `original_location`. The returned Location has the same `alt` value
-    as `original_location`.
-
-    The function is useful when you want to move the vehicle around specifying locations relative to 
-    the current vehicle position.
-    The algorithm is relatively accurate over small distances (10m within 1km) except close to the poles.
-    For more information see:
-    http://gis.stackexchange.com/questions/2951/algorithm-for-offsetting-a-latitude-longitude-by-some-amount-of-meters
-    """
-    earth_radius=6378137.0 #Radius of "spherical" earth
-    #Coordinate offsets in radians
-    dLat = dNorth/earth_radius
-    dLon = dEast/(earth_radius*math.cos(math.pi*original_location.lat/180))
-
-    #New position in decimal degrees
-    newlat = original_location.lat + (dLat * 180/math.pi)
-    newlon = original_location.lon + (dLon * 180/math.pi)
-    return LocationGlobal(newlat, newlon, original_location.alt)
-
+vehicle.airspeed = 3
 
 def get_distance_metres(aLocation1, aLocation2):
     """
@@ -115,8 +117,6 @@ def get_distance_metres(aLocation1, aLocation2):
     dlat = aLocation2.lat - aLocation1.lat
     dlong = aLocation2.lon - aLocation1.lon
     return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
-
-
 
 def distance_to_current_waypoint():
     """
@@ -133,14 +133,6 @@ def distance_to_current_waypoint():
     targetWaypointLocation = LocationGlobalRelative(lat,lon,alt)
     distancetopoint = get_distance_metres(vehicle.location.global_frame, targetWaypointLocation)
     return distancetopoint
-
-def download_mission():
-    """
-    Download the current mission from the vehicle.
-    """
-    cmds = vehicle.commands
-    cmds.download()
-    cmds.wait_ready() # wait until download is complete.
 
 def adds_wypt_mission():
     """
@@ -205,133 +197,144 @@ def adds_wypt_mission():
     print(" Upload new commands to vehicle")
     cmds.upload()
 
-def arm_and_takeoff(aTargetAltitude):
-    """
-    Arms vehicle and fly to aTargetAltitude.
-    """
-
-    print("Basic pre-arm checks")
-    # Don't let the user try to arm until autopilot is ready
-    while not vehicle.is_armable:
-        print(" Waiting for vehicle to initialise...")
-        time.sleep(1)
-
-        
-    print("Arming motors")
-    # Copter should arm in GUIDED mode
-    vehicle.mode = VehicleMode("GUIDED")
-    vehicle.armed = True
-
-    while not vehicle.armed:      
-        print(" Waiting for arming...")
-        time.sleep(1)
-
-    print("Taking off!")
-    vehicle.simple_takeoff(aTargetAltitude) # Take off to target altitude
-
-    # Wait until the vehicle reaches a safe height before processing the goto (otherwise the command 
-    #  after Vehicle.simple_takeoff will execute immediately).
-    while True:
-        print(" Altitude: ", vehicle.location.global_relative_frame.alt)      
-        if vehicle.location.global_relative_frame.alt>=aTargetAltitude*0.95: #Trigger just below target alt.
-            print("Reached target altitude")
-            break
-        time.sleep(1)
-
 print('Create a new mission (for current location)')
 
-adds_wypt_mission()
+#adds_wypt_mission()
+
+cmds = vehicle.commands
+cmds.download()
+cmds.wait_ready()
+if not vehicle.home_location:
+    print("Waiting for home location ...")
 
 print("Starting mission")
 # Reset mission set to first (0) waypoint
 vehicle.commands.next=0
 
 # Set mode to AUTO to start mission
-vehicle.mode = VehicleMode("AUTO")
-
+#vehicle.mode = VehicleMode("AUTO")
 
 # Monitor mission. 
 # Demonstrates getting and setting the command number 
 # Uses distance_to_current_waypoint(), a convenience function for finding the 
 #   distance to the next waypoint.
-
 while True:
     nextwaypoint=vehicle.commands.next
-    if nextwaypoint>10:
+    confidence = 0
+    if nextwaypoint>5:
         camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
         video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
         if video_capture.isOpened():
-            ret_val, frame = video_capture.read()
-            results = model(frame, stream=True)
-            for r in results:
-                boxes = r.boxes
+            try:
+                count = 0
+                while confidence < 5 and count < 10:
+                    ret_val, frame = video_capture.read()
+                    results = model(frame, stream=True)
+                    inframe = []
+                    for r in results:
+                        boxes = r.boxes
 
-                for box in boxes:
-                    # bounding box
-                    x1, y1, x2, y2 = box.xyxy[0]
-                    x1, y1, x2, y2 = (
-                        int(x1),
-                        int(y1),
-                        int(x2),
-                        int(y2),
-                    )  # convert to int values
+                        for box in boxes:
+                            # bounding box
+                            x1, y1, x2, y2 = box.xyxy[0]
+                            x1, y1, x2, y2 = (
+                                int(x1),
+                                int(y1),
+                                int(x2),
+                                int(y2),
+                            )  # convert to int values
 
-                    # put box in cam
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
+                            # put box in cam
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
+                            # class name
+                            roi = frame[y1:y2, x1:x2]
+                            roi = cv2.resize(roi, (300, 300))
+                            
+                            #class name
+                            cls = int(box.cls[0])
+                            inframe.append(model.names[cls])
+                            print("Class name -->", model.names[cls])
+                            cv2.imwrite("Image_"+ model.names[cls] + ".jpg", roi)
 
-                    roi = frame[y1:y2, x1:x2]
+                            # object details
+                            org = [x1, y1]
+                            font = cv2.FONT_HERSHEY_SIMPLEX
+                            fontScale = 1
+                            color = (255, 0, 0)
+                            thickness = 2
 
-                    roi = cv2.resize(roi, (300, 300))
+                            cv2.putText(
+                                frame, model.names[cls], org, font, fontScale, color, thickness
+                            )
+                    # Check to see if the user closed the window
+                    # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
+                    # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
+                    #cv2.imshow(window_title, frame)
 
-                    # class name
-                    cls = int(box.cls[0])
-                    print("Class name -->", model.names[cls])
-                    cv2.imwrite("Image_"+ model.names[cls] + ".jpg", roi)
-
-                    # object details
-                    org = [x1, y1]
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    fontScale = 1
-                    color = (255, 0, 0)
-                    thickness = 2
-
-                    cv2.putText(
-                        frame, classNames[cls], org, font, fontScale, color, thickness
-                    )
-            # Check to see if the user closed the window
-            # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
-            # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
-            #cv2.imshow(window_title, frame)
-            if model.names[cls]=="person":
-                    last_searched = nextwaypoint
-                    vehicle.mode = VehicleMode("GUIDED")
-                    object_point = LocationGlobalRelative(, , mission_ALT)
-                    vehicle.simple_goto(object_point)
-                    x=0
-                    while(get_distance_metres(vehicle.location.global_frame, object_point) > 1):
-                        x += 1
-                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 10, 0, 0, 0, 0, 0, 0) #Pause command
-                    vehicle.send_mavlink(msg)
-                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 9, 2600, 0, 0, 0, 0, 0)
-                    vehicle.send_mavlink(msg)
-                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 2, 0, 0, 0, 0, 0, 0) #Pause command for 2 seconds
-                    vehicle.send_mavlink(msg)
-                    drop_count += 1
-                    vehicle.commands.next = 0
-                    vehicle.mode = VehicleMode("AUTO")
-
-
+                    if "person" in inframe:
+                        last_searched = nextwaypoint
+                        confidence += 1
+                        if confidence >= 5:
+                            vehicle.mode = VehicleMode("GUIDED")
+                            while not vehicle.mode.name=='GUIDED':
+                                time.sleep(1)
+                                print("waiting for mode change...")
+                            print(vehicle.mode)
+                            object_point = vehicle.location.global_frame
+                            vehicle.simple_goto(object_point)
+                            x=0
+                            while(get_distance_metres(vehicle.location.global_frame, object_point) > 1):
+                                time.sleep(1)
+                                print("Approaching Target")
+                            msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 10, 0, 0, 0, 0, 0, 0) #Pause command
+                            vehicle.send_mavlink(msg)
+                            time.sleep(10)
+                            msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 9, 2600, 0, 0, 0, 0, 0)
+                            vehicle.send_mavlink(msg)
+                            msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 2, 0, 0, 0, 0, 0, 0) #Pause command for 2 seconds
+                            vehicle.send_mavlink(msg)
+                            time.sleep(2)
+                            drop_count += 1
+                            vehicle.commands.next = 0
+                            vehicle.mode = VehicleMode("AUTO")
+                            while not vehicle.mode.name=='AUTO':
+                                time.sleep(1)
+                                print("Waiting for mode change back to AUTO...")                            
+                        
+                    #keyCode = cv2.waitKey(30) & 0xFF
+                    # Stop the program on the ESC key or 'q'
+                    #if keyCode == 27 or keyCode == ord('q'):
+                    #    break
+                    count+=1
+                    time.sleep(1)
+            finally:
+                video_capture.release()
+                #cv2.destroyAllWindows()
         else:
             print("Error: Unable to open camera")
-
+    if nextwaypoint==3:
+        vehicle.mode = VehicleMode('GUIDED')
+        while not vehicle.mode.name=='GUIDED':
+            time.sleep(1)
+            print("Waiting for mode change ...")
+        print(vehicle.mode)
+        object_point = LocationGlobalRelative(38.365230, -76.536828, 10)
+        vehicle.simple_goto(object_point)
+        while(get_distance_metres(vehicle.location.global_frame, object_point) > 4):
+            time.sleep(1)
+            print("Approaching Target", get_distance_metres(vehicle.location.global_frame, object_point))
+        vehicle.mode = VehicleMode('AUTO')
+        while not vehicle.mode.name=='AUTO':
+            time.sleep(1)
+            print("Waiting for change back to AUTO...")
     print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
   
     if drop_count > 0 and nextwaypoint == 10:
         vehicle.commands.next = last_searched
     if nextwaypoint == lastwaypoint:
         break
-    time.sleep(1)
-
+    time.sleep(10)
+    
 print('Return to launch')
 vehicle.mode = VehicleMode("RTL")
 video_capture.release()
