@@ -134,7 +134,7 @@ def show_camera():
 
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
     print(gstreamer_pipeline(flip_method=0))
-    camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=1920,height=1080,framerate=59/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink'
+    camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
     video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
     if video_capture.isOpened():
         try:
@@ -174,7 +174,7 @@ def show_camera():
                 # Check to see if the user closed the window
                 # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
                 # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
-                #cv2.imshow(window_title, frame)
+                cv2.imshow(window_title, frame)
                  
                 keyCode = cv2.waitKey(30) & 0xFF
                 # Stop the program on the ESC key or 'q'
