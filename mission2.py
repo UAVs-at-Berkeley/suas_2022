@@ -19,6 +19,9 @@ import cv2
 import time
 import math
 
+import geopy
+import color_detection
+import geopy.distance
 import numpy as np
 
 from ultralytics import YOLO
@@ -49,7 +52,15 @@ lastwaypoint = 7
 
 drop_count = 0
 
-model = YOLO("yolov8n.pt")
+model = YOLO("best.pt")
+
+given_targets = ["rectangle", "quartercircle"]
+
+servo = {
+  9: ("quartercircle", "B", "brown", "blue"),
+  10: ("rectangle", "I", "red", "white"),
+  13: ("semicircle", "7", "green", "black")
+}
 
 classNames = [
     "emergent",
@@ -94,8 +105,8 @@ classNames = [
     "rectangle",
     "star",
     "cross",
-    "half-circle",
-    "quarter-circle",
+    "semicircle",
+    "quartercircle",
     "pentagon",
 
 ]
@@ -117,6 +128,20 @@ def get_distance_metres(aLocation1, aLocation2):
     dlat = aLocation2.lat - aLocation1.lat
     dlong = aLocation2.lon - aLocation1.lon
     return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
+    
+def localization(lon, lat, theta, h, x, y, h_delta, v_delta):
+    dist_x = h * np.tan(h_delta * (x - 0.5))
+    dist_y = h * np.tan(v_delta * (0.5 - y))
+    dist_vector = np.array([[dist_x],[dist_y]])
+    rotation_matrix = np.array([[np.cos(-theta), -np.sin(-theta)],[np.sin(-theta), np.cos(-theta)]])
+    rotated_vector = np.dot(rotation_matrix, dist_vector)
+
+    origin = geopy.Point(lat, lon)
+    distance = (rotated_vector[0][0] ** 2 + rotated_vector[1][0] ** 2) ** 0.5 # in meters
+    direction = 90 - np.arctan(rotated_vector[0][0]/rotated_vector[1][0])
+    d = geopy.distance.distance(meters = distance)
+    final = d.destination(origin, direction)
+    return final.latitude, final.longitude
 
 def distance_to_current_waypoint():
     """
@@ -220,17 +245,22 @@ vehicle.commands.next=0
 #   distance to the next waypoint.
 while True:
     nextwaypoint=vehicle.commands.next
-    confidence = 0
-    if nextwaypoint>5:
+    if drop_count > 0 and nextwaypoint == 10:
+        vehicle.commands.next = last_searched
+    if nextwaypoint<5:
         camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
         video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
         if video_capture.isOpened():
+            confidence = 0
             try:
-                count = 0
-                while confidence < 5 and count < 10:
+                
+                while confidence < 5:
                     ret_val, frame = video_capture.read()
                     results = model(frame, stream=True)
                     inframe = []
+                    colors_found = []
+                    x_loc = 0
+                    y_loc = 0
                     for r in results:
                         boxes = r.boxes
 
@@ -243,6 +273,10 @@ while True:
                                 int(x2),
                                 int(y2),
                             )  # convert to int values
+                            
+                            if len(inframe) == 0:
+                                x_loc = x2+x1 // 2
+                                y_loc = y2+y1 // 2                            
 
                             # put box in cam
                             cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
@@ -250,11 +284,19 @@ while True:
                             roi = frame[y1:y2, x1:x2]
                             roi = cv2.resize(roi, (300, 300))
                             
+                            colors = color_detection.color_det(roi)
+
+                            colors_found.append(colors[0])
+                            colors_found.append(colors[1])
+                            
                             #class name
                             cls = int(box.cls[0])
                             inframe.append(model.names[cls])
                             print("Class name -->", model.names[cls])
                             cv2.imwrite("Image_"+ model.names[cls] + ".jpg", roi)
+                            
+                            print(inframe)
+                            print(colors_found)
 
                             # object details
                             org = [x1, y1]
@@ -269,68 +311,74 @@ while True:
                     # Check to see if the user closed the window
                     # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
                     # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
-                    #cv2.imshow(window_title, frame)
+                    cv2.imshow(window_title, frame)
 
-                    if "person" in inframe:
-                        last_searched = nextwaypoint
-                        confidence += 1
-                        if confidence >= 5:
-                            vehicle.mode = VehicleMode("GUIDED")
-                            while not vehicle.mode.name=='GUIDED':
-                                time.sleep(1)
-                                print("waiting for mode change...")
-                            print(vehicle.mode)
-                            object_point = vehicle.location.global_frame
-                            vehicle.simple_goto(object_point)
-                            x=0
-                            while(get_distance_metres(vehicle.location.global_frame, object_point) > 1):
-                                time.sleep(1)
-                                print("Approaching Target")
-                            msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 10, 0, 0, 0, 0, 0, 0) #Pause command
-                            vehicle.send_mavlink(msg)
-                            time.sleep(10)
-                            msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 9, 2600, 0, 0, 0, 0, 0)
-                            vehicle.send_mavlink(msg)
-                            msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 2, 0, 0, 0, 0, 0, 0) #Pause command for 2 seconds
-                            vehicle.send_mavlink(msg)
-                            time.sleep(2)
-                            drop_count += 1
-                            vehicle.commands.next = 0
-                            vehicle.mode = VehicleMode("AUTO")
-                            while not vehicle.mode.name=='AUTO':
-                                time.sleep(1)
-                                print("Waiting for mode change back to AUTO...")                            
+                    if len(inframe) >= 1:
+                        print(inframe[0])
+                        print(confidence)
+                        if (inframe[0] in given_targets):
+                            last_searched = nextwaypoint
+                            if confidence == 0:
+                                vehicle.mode = VehicleMode("LOITER")
+                                while not vehicle.mode.name=='LOITER':
+                                    time.sleep(1)
+                                    print("waiting for mode change...")
+                                print(vehicle.mode)
+                            confidence += 1
+                            if confidence >= 5:
+                                vehicle.mode = VehicleMode("GUIDED")
+                                while not vehicle.mode.name=='GUIDED':
+                                    time.sleep(1)
+                                    print("waiting for mode change...")
+                                print(vehicle.mode)
+                                object_point = localization(vehicle.location.global_relative_frame.lon, vehicle.location.global_relative_frame.lat, vehicle.heading, vehicle.location.global_relative_frame.alt, x_loc, y_loc, 0.235969, 0.1308997)
+                                point1 = LocationGlobalRelative(object_point[0], object_point[1], vehicle.location.global_relative_frame.alt)
+                                print(point1)
+                                print(vehicle.location.global_relative_frame)
+                                if (get_distance_metres(vehicle.location.global_frame, point1) < 10):
+                                    vehicle.simple_goto(point1)
+                                    x=0
+                                    #while(get_distance_metres(vehicle.location.global_frame, point1) > 3):
+                                        #time.sleep(1)
+                                        #print("Approaching Target")
+                                        
+                                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 10, 0, 0, 0, 0, 0, 0) #Pause command
+                                    vehicle.send_mavlink(msg)
+                                    time.sleep(10)
+                                    for val in servo.values():
+                                        if inframe[0] in val:
+                                            drop_servo = list(servo.keys())[list(servo.values()).index(val)]
+                                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, drop_servo, 2600, 0, 0, 0, 0, 0)
+                                    vehicle.send_mavlink(msg)
+                                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 2, 0, 0, 0, 0, 0, 0) #Pause command for 2 seconds
+                                    vehicle.send_mavlink(msg)
+                                    time.sleep(2)
+                                    drop_count += 1
+                                    vehicle.commands.next = 0
+                                    vehicle.mode = VehicleMode("AUTO")
+                                    while not vehicle.mode.name=='AUTO':
+                                        time.sleep(1)
+                                        print("Waiting for mode change back to AUTO...")
+                                else:
+                                    print("Bad Location")
                         
-                    #keyCode = cv2.waitKey(30) & 0xFF
+                    if distance_to_current_waypoint() < 2:
+                        break
+                    
+                    keyCode = cv2.waitKey(30) & 0xFF
                     # Stop the program on the ESC key or 'q'
-                    #if keyCode == 27 or keyCode == ord('q'):
-                    #    break
-                    count+=1
+                    if keyCode == 27 or keyCode == ord('q'):
+                        break
+                    
                     time.sleep(1)
             finally:
                 video_capture.release()
-                #cv2.destroyAllWindows()
+                cv2.destroyAllWindows()
         else:
             print("Error: Unable to open camera")
-    if nextwaypoint==3:
-        vehicle.mode = VehicleMode('GUIDED')
-        while not vehicle.mode.name=='GUIDED':
-            time.sleep(1)
-            print("Waiting for mode change ...")
-        print(vehicle.mode)
-        object_point = LocationGlobalRelative(38.365230, -76.536828, 10)
-        vehicle.simple_goto(object_point)
-        while(get_distance_metres(vehicle.location.global_frame, object_point) > 4):
-            time.sleep(1)
-            print("Approaching Target", get_distance_metres(vehicle.location.global_frame, object_point))
-        vehicle.mode = VehicleMode('AUTO')
-        while not vehicle.mode.name=='AUTO':
-            time.sleep(1)
-            print("Waiting for change back to AUTO...")
+            
     print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
   
-    if drop_count > 0 and nextwaypoint == 10:
-        vehicle.commands.next = last_searched
     if nextwaypoint == lastwaypoint:
         break
     time.sleep(10)
