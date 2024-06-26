@@ -125,17 +125,8 @@ def color_det(img_in):
     purple_upper = np.array([158, 255, 255], np.uint8)
     purple_mask = cv2.inRange(hsvFrame, purple_lower, purple_upper)
 
-    # Set range for orange color and 
-    # define mask
-    orange_lower = np.array([10, 100, 100], np.uint8)
-    orange_upper = np.array([40, 255, 255], np.uint8)
-    orange_mask = cv2.inRange(hsvFrame, orange_lower, orange_upper)
-
     # Set range for gray color and 
     # define mask
-    gray_lower = np.array([70, 15, 60], np.uint8)
-    gray_upper = np.array([180, 30, 230], np.uint8)
-    gray_mask = cv2.inRange(hsvFrame, gray_lower, gray_upper)
 
     # Set range for red color and 
     # define mask
@@ -195,23 +186,15 @@ def color_det(img_in):
     yellow_mask = cv2.dilate(yellow_mask, kernal)
     res_yellow = cv2.bitwise_and(img, img, 
                             mask = yellow_mask)
-    
-    # For orange color
-    orange_mask = cv2.dilate(orange_mask, kernal)
-    res_orange = cv2.bitwise_and(img, img,
-                                mask = orange_mask)
+
     
     # For purple color
     purple_mask = cv2.dilate(purple_mask, kernal)
     res_purple = cv2.bitwise_and(img, img,
                             mask = purple_mask)
     
-    # For gray color
-    gray_mask = cv2.dilate(gray_mask, kernal)
-    res_gray = cv2.bitwise_and(img, img,
-                            mask = gray_mask)
     
-    color_masks = {'Red': red_mask, 'Green': green_mask, 'Blue': blue_mask, 'Black': black_mask, 'White': white_mask, 'Brown': brown_mask, 'Yellow': yellow_mask, 'Orange': orange_mask, 'Purple': purple_mask, 'Gray': gray_mask}
+    color_masks = {'Red': red_mask, 'Green': green_mask, 'Blue': blue_mask, 'Black': black_mask, 'White': white_mask, 'Brown': brown_mask, 'Yellow': yellow_mask, 'Purple': purple_mask}
     
     # Creating contour to track black color
     contours, hierarchy = cv2.findContours(black_mask,
@@ -302,42 +285,6 @@ def color_det(img_in):
         max_contours['max1'] = {'contour': max_area_purple[0], 'color': 'Purple', 'area': max_area_purple[1]}
     elif max_area_purple[1] > max_contours['max2']['area']:
         max_contours['max2'] = {'contour': max_area_purple[0], 'color': 'Purple', 'area': max_area_purple[1]}
-
-    # Creating contour to track orange color
-    contours, hierarchy = cv2.findContours(orange_mask,
-                                        cv2.RETR_TREE,
-                                        cv2.CHAIN_APPROX_SIMPLE)
-    
-    max_area_orange = (None, 0)
-    
-    for contour in list(contours):
-        area = cv2.contourArea(contour)
-        if(area > max_area_orange[1]):
-            max_area_orange = (contour, area)
-            
-    if max_area_orange[1] > max_contours['max1']['area']:
-        max_contours['max2'] = max_contours['max1']
-        max_contours['max1'] = {'contour': max_area_orange[0], 'color': 'Orange', 'area': max_area_orange[1]}
-    elif max_area_orange[1] > max_contours['max2']['area']:
-        max_contours['max2'] = {'contour': max_area_orange[0], 'color': 'Orange', 'area': max_area_orange[1]}
-
-    # Creating contour to track gray color
-    contours, hierarchy = cv2.findContours(gray_mask,
-                                        cv2.RETR_TREE,
-                                        cv2.CHAIN_APPROX_SIMPLE)
-    
-    max_area_gray = (None, 0)
-    
-    for contour in list(contours):
-        area = cv2.contourArea(contour)
-        if(area > max_area_gray[1]):
-            max_area_gray = (contour, area)
-            
-    if max_area_gray[1] > max_contours['max1']['area']:
-        max_contours['max2'] = max_contours['max1']
-        max_contours['max1'] = {'contour': max_area_gray[0], 'color': 'Gray', 'area': max_area_gray[1]}
-    elif max_area_gray[1] > max_contours['max2']['area']:
-        max_contours['max2'] = {'contour': max_area_gray[0], 'color': 'Gray', 'area': max_area_gray[1]}
 
     # Creating contour to track red color
     contours, hierarchy = cv2.findContours(red_mask,

@@ -46,21 +46,25 @@ connection_string = args.connect
 mission_ALT = 25
 airfield_MSL = 43.2816
 
-last_searched = 11
+last_searched = 12
 
-lastwaypoint = 7
+lastwaypoint = 131
 
 drop_count = 0
 
 model = YOLO("best.pt")
 
-given_targets = ["rectangle", "quartercircle"]
+given_targets = ["triangle", "pentagon", "cross","J", "E", "4"]
+
+given_colors = ["green", "red", "blue", "purple", "yellow", "white"]
 
 servo = {
-  9: ("quartercircle", "B", "brown", "blue"),
-  10: ("rectangle", "I", "red", "white"),
-  13: ("semicircle", "7", "green", "black")
+  9: ("triangle", "J", "green", "purple"),
+  10: ("pentagon", "E", "red", "yellow"),
+  13: ("cross", "4", "blue", "white")
 }
+
+confidence = {}
 
 classNames = [
     "emergent",
@@ -114,8 +118,6 @@ window_title = "CSI Camera"
 
 print('Connecting to vehicle on: %s' % connection_string)
 vehicle = connect(connection_string, wait_ready=True)
-
-vehicle.airspeed = 3
 
 def get_distance_metres(aLocation1, aLocation2):
     """
@@ -245,16 +247,16 @@ vehicle.commands.next=0
 #   distance to the next waypoint.
 while True:
     nextwaypoint=vehicle.commands.next
-    if drop_count > 0 and nextwaypoint == 10:
+    if drop_count > 0 and nextwaypoint == 12:
         vehicle.commands.next = last_searched
-    if nextwaypoint<5:
+    if nextwaypoint>11:
+        vehicle.airspeed = 3
         camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
         video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
         if video_capture.isOpened():
-            confidence = 0
             try:
                 
-                while confidence < 5:
+                while True:
                     ret_val, frame = video_capture.read()
                     results = model(frame, stream=True)
                     inframe = []
@@ -286,12 +288,17 @@ while True:
                             
                             colors = color_detection.color_det(roi)
 
-                            colors_found.append(colors[0])
-                            colors_found.append(colors[1])
+                            if colors[0] in given_colors:
+                                colors_found.append(colors[0])
+                                main_color = colors[0]
+                            if colors[1] in given_colors:
+                                colors_found.append(colors[1])
+                                sec_color = colors[1]
                             
                             #class name
                             cls = int(box.cls[0])
-                            inframe.append(model.names[cls])
+                            if model.names[cls] in given_targets:
+                                inframe.append(model.names[cls])
                             print("Class name -->", model.names[cls])
                             cv2.imwrite("Image_"+ model.names[cls] + ".jpg", roi)
                             
@@ -311,21 +318,23 @@ while True:
                     # Check to see if the user closed the window
                     # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
                     # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
-                    cv2.imshow(window_title, frame)
+                    #cv2.imshow(window_title, frame)
 
-                    if len(inframe) >= 1:
+                    for tar in inframe:
                         print(inframe[0])
                         print(confidence)
-                        if (inframe[0] in given_targets):
-                            last_searched = nextwaypoint
-                            if confidence == 0:
+                        if (tar in given_targets):
+                            if not tar in list(confidence.keys()):
                                 vehicle.mode = VehicleMode("LOITER")
                                 while not vehicle.mode.name=='LOITER':
                                     time.sleep(1)
                                     print("waiting for mode change...")
                                 print(vehicle.mode)
-                            confidence += 1
-                            if confidence >= 5:
+                                confidence[tar] = 0
+                            confidence[tar] += 1
+                            if confidence[tar] == 3:
+                                last_searched = nextwaypoint
+                                confidence[tar] += 1
                                 vehicle.mode = VehicleMode("GUIDED")
                                 while not vehicle.mode.name=='GUIDED':
                                     time.sleep(1)
@@ -338,15 +347,15 @@ while True:
                                 if (get_distance_metres(vehicle.location.global_frame, point1) < 10):
                                     vehicle.simple_goto(point1)
                                     x=0
-                                    #while(get_distance_metres(vehicle.location.global_frame, point1) > 3):
-                                        #time.sleep(1)
-                                        #print("Approaching Target")
+                                    while(get_distance_metres(vehicle.location.global_frame, point1) > 3):
+                                        time.sleep(1)
+                                        print("Approaching Target")
                                         
                                     msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 10, 0, 0, 0, 0, 0, 0) #Pause command
                                     vehicle.send_mavlink(msg)
                                     time.sleep(10)
                                     for val in servo.values():
-                                        if inframe[0] in val:
+                                        if tar in val:
                                             drop_servo = list(servo.keys())[list(servo.values()).index(val)]
                                     msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, drop_servo, 2600, 0, 0, 0, 0, 0)
                                     vehicle.send_mavlink(msg)
@@ -359,21 +368,39 @@ while True:
                                     while not vehicle.mode.name=='AUTO':
                                         time.sleep(1)
                                         print("Waiting for mode change back to AUTO...")
+                                    break
                                 else:
                                     print("Bad Location")
+                                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 10, 0, 0, 0, 0, 0, 0) #Pause command
+                                    vehicle.send_mavlink(msg)
+                                    time.sleep(10)
+                                    for val in servo.values():
+                                        if tar in val:
+                                            drop_servo = list(servo.keys())[list(servo.values()).index(val)]
+                                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, drop_servo, 2600, 0, 0, 0, 0, 0)
+                                    vehicle.send_mavlink(msg)
+                                    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_CONDITION_DELAY, 0, 2, 0, 0, 0, 0, 0, 0) #Pause command for 2 seconds
+                                    vehicle.send_mavlink(msg)
+                                    time.sleep(2)
+                                    drop_count += 1
+                                    vehicle.commands.next = 0
+                                    vehicle.mode = VehicleMode("AUTO")
+                                    while not vehicle.mode.name=='AUTO':
+                                        time.sleep(1)
+                                        print("Waiting for mode change back to AUTO...")
+                                    break
                         
-                    if distance_to_current_waypoint() < 2:
-                        break
                     
-                    keyCode = cv2.waitKey(30) & 0xFF
+                    
+                    #keyCode = cv2.waitKey(30) & 0xFF
                     # Stop the program on the ESC key or 'q'
-                    if keyCode == 27 or keyCode == ord('q'):
-                        break
+                    #if keyCode == 27 or keyCode == ord('q'):
+                    #    break
                     
                     time.sleep(1)
             finally:
                 video_capture.release()
-                cv2.destroyAllWindows()
+                #cv2.destroyAllWindows()
         else:
             print("Error: Unable to open camera")
             
