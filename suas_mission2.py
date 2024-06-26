@@ -54,7 +54,7 @@ lastwaypoint = 7
 
 drop_count = 0
 
-model = YOLO("yolov8n.pt")
+model = YOLO("best.pt")
 
 given_targets = []
 
@@ -244,14 +244,16 @@ vehicle.commands.next=0
 # Demonstrates getting and setting the command number 
 # Uses distance_to_current_waypoint(), a convenience function for finding the 
 #   distance to the next waypoint.
-camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
-video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
+#camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
+#video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
 
 while True:
     nextwaypoint=vehicle.commands.next
     if drop_count > 0 and nextwaypoint == 10:
         vehicle.commands.next = last_searched
-    if nextwaypoint>5:
+    if nextwaypoint<5:
+        camSet = 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=3840,height=2160,framerate=29/1,format=NV12 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,width=1920,height=1080,format=BGR ! queue ! appsink'
+        video_capture = cv2.VideoCapture(camSet, cv2.CAP_GSTREAMER)
         if video_capture.isOpened():
             confidence = 0
             try:
@@ -303,8 +305,10 @@ while True:
                     # Check to see if the user closed the window
                     # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
                     # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
-                    #cv2.imshow(window_title, frame)
-                    if len(inframe) == 1:
+                    cv2.imshow(window_title, frame)
+                    if len(inframe) >= 1:
+                        print(inframe[0])
+                        print(confidence)
                         if (inframe[0] in given_targets):
                             last_searched = nextwaypoint
                             if confidence == 0:
@@ -391,14 +395,14 @@ while True:
                     if distance_to_current_waypoint() < 2:
                         break                       
                         
-                    #keyCode = cv2.waitKey(30) & 0xFF
+                    keyCode = cv2.waitKey(30) & 0xFF
                     # Stop the program on the ESC key or 'q'
-                    #if keyCode == 27 or keyCode == ord('q'):
-                    #    break
+                    if keyCode == 27 or keyCode == ord('q'):
+                        break
                     time.sleep(1)
             finally:
                 video_capture.release()
-                #cv2.destroyAllWindows()
+                cv2.destroyAllWindows()
         else:
             print("Error: Unable to open camera")
 
