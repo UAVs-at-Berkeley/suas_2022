@@ -23,7 +23,7 @@ import numpy as np
 
 import geopy
 import color_detection
-from geopy.distance import VincentyDistance
+import geopy.distance
 import numpy as np
 
 from ultralytics import YOLO
@@ -141,7 +141,7 @@ def localization(lon, lat, theta, h, x, y, delta):
     origin = geopy.Point(lat, lon)
     distance = (rotated_vector[0][0] ** 2 + rotated_vector[1][0] ** 2) ** 0.5 # in meters
     direction = 90 - np.arctan(rotated_vector[0][0]/rotated_vector[1][0])
-    dest_lat, dest_lon = VincentyDistance(meters = distance).destination(origin, direction)
+    dest_lat, dest_lon = geopy.distance.distance(meters = distance).destination(origin, direction)
     return dest_lat, dest_lon
 
 def distance_to_current_waypoint():
