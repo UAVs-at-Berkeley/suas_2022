@@ -30,7 +30,8 @@ cmds.wait_ready()
 if not vehicle.home_location:
     print("Waiting for home location ...")
 
-vehicle.gimbal.rotate(-90, 0, 0)
+if math.abs(vehicle.gimbal.pitch + 90) > 0.1:
+    vehicle.gimbal.rotate(-90, 0, 0)
 time.sleep(10)
 
 still_image_dict = {
@@ -328,7 +329,7 @@ while cap.isOpened():
             # 9. Draw the matches
             #print(good_matches[best_match_idx])
             #print(good_matches)
-            matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, [good_matches[best_match_idx]], None, flags=cv2.DrawMatchesFlags_DEFAULT)
+            matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
 
             # Show the matched image
             vid_matches.write(matched_img)
