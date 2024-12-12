@@ -49,6 +49,9 @@ d_fov = 79.5
 cam_size = (2560, 1440)
 cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
 print(cam_x)
+cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
+half_cam_diag = cam_diag/2
+print(half_cam_diag)
 cam_y = math.sqrt(4*((math.tan(79.5*math.pi/2/180))**2)*(drone_alt**2)-(cam_x**2))
 print(cam_y)
 
@@ -149,15 +152,19 @@ flann = cv2.FlannBasedMatcher(index_params, search_params)
 # 4. Open the video file
 cap = cv2.VideoCapture(video_path)
 
+print(cap.get(3))
+print(cap.get(4))
+
 orb2 = cv2.ORB_create(nfeatures=150)
 
 cluster_count = 6
 total_dist_traveled = 0
 
+#vid_matches = cv2.VideoWriter('vid_matches.avi', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(horizontal_size+cap.get(3)), int(max([vertical_size, cap.get(4)]))))
+
 # 5. Process each frame of the video
 while cap.isOpened():
     ret, frame = cap.read()
-    cv2.resize(frame, (100, 100))
     if not ret:
         break
 
@@ -221,7 +228,6 @@ while cap.isOpened():
         centroid_gps_long = 0
         centroid_cluster_idx = 0
         medians = dataset.groupby('cluster').median()
-        print(type(medians))
         for i in range(0, 3):
             largest_cluster_idx = count_list[i][0]
             #print(largest_cluster_idx)
@@ -237,7 +243,7 @@ while cap.isOpened():
             median_gps_long_temp = still_image_dict[1][2] - ((max_median[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
             med_dist_to_last_pt = get_distance_metres(median_gps_lat_temp, median_gps_long_temp, last_prediction_lat, last_prediction_lon)
             print(med_dist_to_last_pt)
-            if dist_to_last_pt < 50:
+            if dist_to_last_pt < half_cam_diag:
                 print((centroid_gps_lat_temp, centroid_gps_long_temp))
                 print((median_gps_lat_temp, median_gps_long_temp))
                 centroid_gps_lat = median_gps_lat_temp
@@ -260,12 +266,12 @@ while cap.isOpened():
         cam_gps_lat_sum = 0
         cam_gps_long_sum = 0
         for row in y.itertuples():
-            print(row)
+            #print(row)
             x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * (180 / math.pi)
             x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
             dist_to_centroid = get_distance_metres(x_lat, x_long, centroid_gps_lat, centroid_gps_long)
             print(dist_to_centroid)
-            if dist_to_centroid < 3:
+            if dist_to_centroid < 5:
                 still_gps_lat = x_lat
                 still_gps_long = x_long
                 print((x_lat, x_long))
@@ -312,7 +318,9 @@ while cap.isOpened():
         matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, [good_matches[best_match_idx]], None, flags=cv2.DrawMatchesFlags_DEFAULT)
 
         # Show the matched image
-        cv2.imshow('Matches', matched_img)
+        #vid_matches.write(matched_img)
+        cv2.imshow("Matches", matched_img)
+        #print(cv2.getWindowImageRect("Matches"))
         cv2.imshow("Still image key points", still_kps)
         cv2.imshow("Frame image key points", frame_kps)
 
@@ -324,5 +332,6 @@ while cap.isOpened():
             break
 print(total_dist_traveled)
 # Release the video capture and close the window
+#vid_matches.release()
 cap.release()
 cv2.destroyAllWindows()
