@@ -24,17 +24,17 @@ if not cap.isOpened():
 ct = 0
 while True:
     # Capture frame-by-frame
-    # ret, frame = cap.read()
+    ret, frame = cap.read()
     
     # if not ret:
     #     print("Error: Failed to read frame.")
     #     break
     ct += 1
 
-    ret = cap.grab()
+    #ret = cap.grab()
     if (ct >= 30):
         ct = 0
-        ret, frame = cap.retrieve()
+        #ret, frame = cap.retrieve()
         if not ret:
             print("error: failed to read frame :\(")
             break
