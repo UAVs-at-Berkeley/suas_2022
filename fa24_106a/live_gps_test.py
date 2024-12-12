@@ -39,7 +39,7 @@ still_image_dict = {
 
 
 r_earth = 6378000
-drone_alt = 100 #0
+drone_alt = 113 #0
 drone_lat = 37.871296#vehicle.home_location.lat
 drone_lon = 122.317491#vehicle.home_location.lon
 last_prediction_lat = drone_lat
@@ -288,8 +288,8 @@ while cap.isOpened():
         # print(((frame_pt[0] - cam_size[0]/2)*cam_x_size))
         # print((((frame_pt[1] - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi))
 
-        #cam_gps_lat = cam_gps_lat_sum / counter
-        #cam_gps_long = cam_gps_long_sum / counter
+        cam_gps_lat = cam_gps_lat_sum / counter
+        cam_gps_long = cam_gps_long_sum / counter
 
         gps_error = get_distance_metres(cam_gps_lat, cam_gps_long, drone_lat, drone_lon)
         print("GPS error: "+str(gps_error))
