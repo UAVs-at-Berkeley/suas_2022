@@ -30,8 +30,8 @@ cmds.wait_ready()
 if not vehicle.home_location:
     print("Waiting for home location ...")
 
-if math.abs(vehicle.gimbal.pitch + 90) > 0.1:
-    vehicle.gimbal.rotate(-90, 0, 0)
+
+vehicle.gimbal.rotate(-90, 0, 0)
 time.sleep(10)
 
 still_image_dict = {
@@ -43,14 +43,14 @@ still_image_dict = {
 
 
 r_earth = 6378000
-drone_alt = 113 #0
-drone_lat = 37.871296#vehicle.home_location.lat
-drone_lon = 122.317491#vehicle.home_location.lon
+drone_alt = 1
+drone_lat = 37.87119 #vehicle.home_location.lat
+drone_lon = 122.3176# vehicle.home_location.lon
 last_prediction_lat = drone_lat
 last_prediction_lon = drone_lon
 h_fov = 71.5
 d_fov = 79.5
-cam_size = (2560, 1440)
+cam_size = (1920, 1080)
 cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
 print(cam_x)
 cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
@@ -66,11 +66,16 @@ print(cam_y_size)
 
 
 
-# @vehicle.on_attribute('location.global_relative_frame')
-# def listener(self, attr_name, value):
-#     drone_alt = value.alt
-#     drone_lat = value.lat
-#     drone_lon = value.lon 
+@vehicle.on_attribute('location.global_relative_frame')
+def listener(self, attr_name, value):
+    if value.alt > 0:
+        drone_alt = value.alt
+        cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
+        cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
+        half_cam_diag = cam_diag
+        cam_y = math.sqrt(4*((math.tan(79.5*math.pi/2/180))**2)*(drone_alt**2)-(cam_x**2))
+    drone_lat = value.lat
+    drone_lon = value.lon 
 
 def get_location_metres(original_location, dNorth, dEast):
     """
@@ -257,7 +262,7 @@ while cap.isOpened():
                 median_gps_long_temp = still_image_dict[1][2] - ((max_median[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
                 med_dist_to_last_pt = get_distance_metres(median_gps_lat_temp, median_gps_long_temp, last_prediction_lat, last_prediction_lon)
                 print(med_dist_to_last_pt)
-                if dist_to_last_pt < half_cam_diag:
+                if med_dist_to_last_pt < 50:
                     print((centroid_gps_lat_temp, centroid_gps_long_temp))
                     print((median_gps_lat_temp, median_gps_long_temp))
                     centroid_gps_lat = median_gps_lat_temp
@@ -320,10 +325,10 @@ while cap.isOpened():
             #print((still_gps_lat, still_gps_lat))
             #print((cam_gps_long, cam_gps_lat))
 
-            filegps = None #open("comp_gps.txt", "a")
+            filegps = open("comp_gps.txt", "a")
             if filegps != None:
                 filegps.write("Estimated GPS: ("+str(cam_gps_lat)+","+str(cam_gps_long)+") Actual GPS: ("+str(drone_lat)+","+str(drone_lon)+") Error: "+str(gps_error)+"m")
-            #filegps.close()
+            filegps.close()
             print("Estimated GPS: ("+str(cam_gps_lat)+","+str(cam_gps_long)+") Actual GPS: ("+str(drone_lat)+","+str(drone_lon)+") Error: "+str(gps_error)+"m")
             
             # 9. Draw the matches
