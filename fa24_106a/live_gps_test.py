@@ -2,14 +2,46 @@ import cv2
 import math
 import time
 
+import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+from collections import Counter
+from operator import itemgetter
+
+from pymavlink import mavutil
+from dronekit import connect, VehicleMode, LocationGlobalRelative, LocationGlobal, Command
+
+import argparse  
+parser = argparse.ArgumentParser(description='Demonstrates basic mission operations.')
+parser.add_argument('--connect', 
+                   help="vehicle connection target string. If not specified, SITL automatically started and used.")
+args = parser.parse_args()
+
+connection_string = args.connect
+
+print('Connecting to vehicle on: %s' % connection_string)
+vehicle = connect(connection_string, wait_ready=True)
+
+cmds = vehicle.commands
+cmds.download()
+cmds.wait_ready()
+if not vehicle.home_location:
+    print("Waiting for home location ...")
+
 still_image_dict = {
     0:('37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
     1:('37.872312N_122.319072W_235.56H_364.08W.png', 37.872312, 122.319072, 235.56, 364.08), 
     2:('37.874496H_122.322454W_242.73H_297.8W.png', 37.874496, 122.322454, 242.73, 297.8), 
     3:('37.874496N_122.319072W_242.73H_364.08W.png', 37.874496, 122.319072, 242.73, 364.08)
 }
+
+
 r_earth = 6378000
-drone_alt = 50
+drone_alt = 50 #0
+drone_lat = vehicle.home_location.lat
+drone_lon = vehicle.home_location.lon
 h_fov = 71.5
 d_fov = 79.5
 cam_size = (2560, 1440)
@@ -23,21 +55,82 @@ print(cam_x_size)
 cam_y_size = cam_y / cam_size[1]
 print(cam_y_size)
 
+@vehicle.on_attribute('location.global_relative_frame')
+def listener(self, attr_name, value):
+    drone_alt = value.alt
+    drone_lat = value.lat
+    drone_lon = value.lon 
+
+def get_location_metres(original_location, dNorth, dEast):
+    """
+    Returns a LocationGlobal object containing the latitude/longitude `dNorth` and `dEast` metres from the
+    specified `original_location`. The returned LocationGlobal has the same `alt` value
+    as `original_location`.
+
+    The function is useful when you want to move the vehicle around specifying locations relative to
+    the current vehicle position.
+
+    The algorithm is relatively accurate over small distances (10m within 1km) except close to the poles.
+    """
+    earth_radius=6378137.0 #Radius of "spherical" earth
+    #Coordinate offsets in radians
+    dLat = dNorth/earth_radius
+    dLon = dEast/(earth_radius*math.cos(math.pi*original_location.lat/180))
+
+    #New position in decimal degrees
+    newlat = original_location.lat + (dLat * 180/math.pi)
+    newlon = original_location.lon + (dLon * 180/math.pi)
+    if type(original_location) is LocationGlobal:
+        targetlocation=LocationGlobal(newlat, newlon,original_location.alt)
+    elif type(original_location) is LocationGlobalRelative:
+        targetlocation=LocationGlobalRelative(newlat, newlon,original_location.alt)
+    else:
+        raise Exception("Invalid Location object passed")
+
+    return targetlocation
+
+def get_distance_metres_pts(aLocation1, aLocation2):
+    """
+    Returns the ground distance in metres between two `LocationGlobal` or `LocationGlobalRelative` objects.
+
+    This method is an approximation, and will not be accurate over large distances and close to the
+    earth's poles. It comes from the ArduPilot test code:
+    https://github.com/diydrones/ardupilot/blob/master/Tools/autotest/common.py
+    """
+    dlat = aLocation2.lat - aLocation1.lat
+    dlong = aLocation2.lon - aLocation1.lon
+    return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
+
+def get_distance_metres(lat1, lon1, lat2, lon2):
+    """
+    Returns the ground distance in metres between two `LocationGlobal` or `LocationGlobalRelative` objects.
+
+    This method is an approximation, and will not be accurate over large distances and close to the
+    earth's poles. It comes from the ArduPilot test code:
+    https://github.com/diydrones/ardupilot/blob/master/Tools/autotest/common.py
+    """
+    dlat = lat2 - lat1
+    dlong = lon2 - lon1
+    return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
+
 # 1. Load the still image and the video
-still_image = cv2.imread(still_image_dict[0][0], cv2.IMREAD_GRAYSCALE)
+still_image = cv2.imread(still_image_dict[1][0], cv2.IMREAD_GRAYSCALE)
 video_path = 'lowaltflight.mp4'
 horizontal_size = still_image.shape[:2][1]
 print(horizontal_size)
 vertical_size = still_image.shape[:2][0]
 print(vertical_size)
-x_size = still_image_dict[0][4] / horizontal_size
+x_size = still_image_dict[1][4] / horizontal_size
 print(x_size)
-y_size = still_image_dict[0][3] / vertical_size
+y_size = still_image_dict[1][3] / vertical_size
 print(y_size)
 
 # 2. Detect keypoints and descriptors in the still image using ORB
 orb = cv2.ORB_create(nfeatures=50)
-kp_still, des_still = orb.detectAndCompute(still_image, None)
+#kp_still, des_still = orb.detectAndCompute(still_image, None)
+kpts_still = orb.detect(still_image, None)
+desc = cv2.xfeatures2d.BEBLID_create(0.75)
+kp_still, des_still = desc.compute(still_image, kpts_still)
 
 still_kps = cv2.drawKeypoints(still_image, kp_still, None, color=(0,255,0), flags=0)
 
@@ -56,6 +149,8 @@ cap = cv2.VideoCapture(video_path)
 
 orb2 = cv2.ORB_create(nfeatures=50)
 
+cluster_count = 6
+
 # 5. Process each frame of the video
 while cap.isOpened():
     ret, frame = cap.read()
@@ -67,7 +162,10 @@ while cap.isOpened():
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # 6. Detect keypoints and descriptors in the frame
-    kp_frame, des_frame = orb2.detectAndCompute(gray_frame, None)
+    #kp_frame, des_frame = orb2.detectAndCompute(gray_frame, None)
+    kpts_frame = orb.detect(gray_frame, None)
+    kp_frame, des_frame = desc.compute(gray_frame, kpts_frame)
+
     frame_kps = cv2.drawKeypoints(gray_frame, kp_frame, None, color=(0,255,0), flags=0)
 
     # 7. Match descriptors using FLANN
@@ -76,10 +174,17 @@ while cap.isOpened():
 
         # 8. Apply the ratio test to filter matches (Lowe's ratio test)
         good_matches = []
+        good_matches_xy = {
+            'still_x_pt':[],
+            'still_y_pt':[],
+            'frame_x_pt':[],
+            'frame_y_pt':[]
+
+        }
         for m in matches:
             if len(m) == 2:  # Ensure that we have two matches
                 # Apply Lowe's ratio test
-                if m[0].distance < 0.7 * m[1].distance:
+                if m[0].distance < 0.95 * m[1].distance:
                     #print(m[0].queryIdx)
                     #print(m[1].queryIdx)
                     #print(m[0].trainIdx)
@@ -87,30 +192,85 @@ while cap.isOpened():
                     #query_idx = 0#m.queryIdx
                     #train_idx = 0#m.trainIdx 537,935
                     still_pt = kp_still[m[0].queryIdx].pt
-                    frame_pt = kp_frame[m[1].trainIdx].pt
+                    frame_pt = kp_frame[m[0].trainIdx].pt
                     print(still_pt)
                     print(frame_pt)
                     
-                    print(still_pt[1]*y_size)
-                    print(still_pt[0]*x_size)
-                    print((still_pt[1]*y_size / r_earth) * (180 / math.pi))
-                    still_gps_lat = still_image_dict[1][1] - (still_pt[1]*y_size / r_earth) * (180 / math.pi)
-                    still_gps_long = still_image_dict[1][2] - ((still_pt[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
+                    good_matches_xy['frame_x_pt'].append(frame_pt[0])
+                    good_matches_xy['frame_y_pt'].append(frame_pt[1])
+                    good_matches_xy['still_x_pt'].append(still_pt[0])
+                    good_matches_xy['still_y_pt'].append(still_pt[1])
                     
-                    print(((frame_pt[1] - cam_size[1]/2)*cam_y_size))
-                    print(((frame_pt[0] - cam_size[0]/2)*cam_x_size))
-                    print((((frame_pt[1] - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi))
-                    
-                    cam_gps_lat = still_gps_lat - (((frame_pt[1] - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi)
-                    cam_gps_long = still_gps_long + (((frame_pt[0] - cam_size[0]/2)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
-
-                    print((still_gps_long, still_gps_lat))
-                    print((cam_gps_long, cam_gps_lat))
-                    cv2.putText(still_kps, text=str((still_gps_long, still_gps_lat)) + " " + str((int(still_pt[0]), int(still_pt[1]))), org=(int(still_pt[0]), int(still_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
-                    cv2.putText(frame_kps, text=str((cam_gps_long, cam_gps_lat)), org=(int(frame_pt[0]), int(frame_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
+                    cv2.putText(still_kps, text=str(str((int(still_pt[0]), int(still_pt[1])))), org=(int(still_pt[0]), int(still_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
+                    cv2.putText(frame_kps, text=str((int(frame_pt[0]), int(frame_pt[1]))), org=(int(frame_pt[0]), int(frame_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                     good_matches.append(m[0])
                     
+        dataset = pd.DataFrame(good_matches_xy)
+        X = dataset.drop(columns=['frame_x_pt', 'frame_y_pt'])
+        kmeans = KMeans(n_clusters=cluster_count, n_init=10)
+        label = kmeans.fit_predict(X)
+        dataset['cluster'] = kmeans.labels_
+        count = Counter(kmeans.labels_)
+        print(good_matches_xy)
+        print(sorted(count.items(), key=itemgetter(1), reverse=True))
+        count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
+        centroid_gps_lat = 0
+        centroid_gps_long = 0
+        centroid_cluster_idx = 0
+        for i in range(0, 3):
+            largest_cluster_idx = largest_cluster_idx = count_list[i][0]
+            print(largest_cluster_idx)
+            max_centroid = kmeans.cluster_centers_[largest_cluster_idx]
+            print(max_centroid)
+            centroid_gps_lat_temp = still_image_dict[1][1] - (max_centroid[1]*y_size / r_earth) * (180 / math.pi)
+            centroid_gps_long_temp = still_image_dict[1][2] - ((max_centroid[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
+            dist_to_last_pt = get_distance_metres(centroid_gps_lat_temp, centroid_gps_long_temp, last_prediction_lat, last_prediction_lon)
+            if dist_to_last_pt < 50:
+                centroid_gps_lat = centroid_gps_lat_temp
+                centroid_gps_long = centroid_gps_long_temp
+                centroid_cluster_idx = largest_cluster_idx
+                break
+        if centroid_gps_lat == 0 or centroid_gps_long == 0:
+            break
 
+
+        plt.scatter(dataset['still_x_pt'], dataset['still_y_pt'], c=dataset['cluster'])
+        plt.colorbar()
+        plt.show()
+        cam_gps_long = 0
+        cam_gps_lat = 0
+
+        y = dataset[dataset['cluster'] == largest_cluster_idx]
+        for row in y.itertuples():
+            x_lat = still_image_dict[1][1] - (x[1]*y_size / r_earth) * (180 / math.pi)
+            x_long = still_image_dict[1][2] - ((x[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
+            dist_to_centroid = get_distance_metres(x_lat, x_long, centroid_gps_lat, centroid_gps_long)
+            if dist_to_centroid < 10:
+                still_gps_lat = x_lat
+                still_gps_long = x_long
+                cam_gps_lat = still_gps_lat - (((frame_pt[1] - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi)
+                cam_gps_long = still_gps_long + (((frame_pt[0] - cam_size[0]/2)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
+                break
+        if cam_gps_lat == 0 or cam_gps_long == 0:
+            break
+        # print(still_pt[1]*y_size)
+        # print(still_pt[0]*x_size)
+        # print((still_pt[1]*y_size / r_earth) * (180 / math.pi))
+        
+        # print(((frame_pt[1] - cam_size[1]/2)*cam_y_size))
+        # print(((frame_pt[0] - cam_size[0]/2)*cam_x_size))
+        # print((((frame_pt[1] - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi))
+        gps_error = get_distance_metres(cam_gps_lat, cam_gps_long, drone_lat, drone_lon)
+
+        print((still_gps_long, still_gps_lat))
+        #print((cam_gps_long, cam_gps_lat))
+
+        filegps = None #open("comp_gps.txt", "a")
+        if filegps != None:
+            filegps.write("Estimated GPS: ("+str(cam_gps_lat)+","+str(cam_gps_long)+") Actual GPS: ("+str(drone_lat)+","+str(drone_lon)+") Error: "+str(gps_error)+"m")
+        #filegps.close()
+        print("Estimated GPS: ("+str(cam_gps_lat)+","+str(cam_gps_long)+") Actual GPS: ("+str(drone_lat)+","+str(drone_lon)+") Error: "+str(gps_error)+"m")
+        
         # 9. Draw the matches
         matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
 
@@ -118,6 +278,9 @@ while cap.isOpened():
         cv2.imshow('Matches', matched_img)
         cv2.imshow("Still image key points", still_kps)
         cv2.imshow("Frame image key points", frame_kps)
+
+        last_prediction_lat = cam_gps_lat
+        last_prediction_lon = cam_gps_long
 
         # Press 'q' to quit the video
         if cv2.waitKey(1) & 0xFF == ord('q'):
