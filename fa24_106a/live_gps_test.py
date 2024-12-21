@@ -43,7 +43,7 @@ still_image_dict = {
 
 
 r_earth = 6378000
-drone_alt = 1
+drone_alt = 30
 drone_lat = 37.87119 #vehicle.home_location.lat
 drone_lon = 122.3176# vehicle.home_location.lon
 last_prediction_lat = drone_lat
@@ -51,6 +51,8 @@ last_prediction_lon = drone_lon
 h_fov = 71.5
 d_fov = 79.5
 cam_size = (1920, 1080)
+droner_lat = 0
+droner_lon = 0
 cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
 print(cam_x)
 cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
@@ -70,12 +72,16 @@ print(cam_y_size)
 def listener(self, attr_name, value):
     if value.alt > 0:
         drone_alt = value.alt
-        cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
-        cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
-        half_cam_diag = cam_diag
-        cam_y = math.sqrt(4*((math.tan(79.5*math.pi/2/180))**2)*(drone_alt**2)-(cam_x**2))
-    drone_lat = value.lat
-    drone_lon = value.lon 
+        #print("Altitude"+str(drone_alt))
+        #cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
+        #cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
+#         half_cam_diag = cam_diag
+        #cam_y = math.sqrt(4*((math.tan(79.5*math.pi/2/180))**2)*(drone_alt**2)-(cam_x**2))
+    #droner_lat = value.lat
+    #print("Drone_GPS:"+str(drone_lat))
+    #droner_lon = value.lon
+    #print("Drone_GPS_LONG:"+str(drone_lon))
+
 
 def get_location_metres(original_location, dNorth, dEast):
     """
@@ -187,6 +193,14 @@ while cap.isOpened():
         if not ret:
             break
 
+        drone_alt = vehicle.location.global_relative_frame.alt
+        cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
+        print("camx: "+str(cam_x))
+        cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
+        half_cam_diag = cam_diag/2
+        cam_y = math.sqrt(4*((math.tan(79.5*math.pi/2/180))**2)*(drone_alt**2)-(cam_x**2))
+        cam_x_size = cam_x / cam_size[0]
+        cam_y_size = cam_y / cam_size[1]
         # Convert the frame to grayscale
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -240,6 +254,8 @@ while cap.isOpened():
             label = kmeans.fit_predict(X)
             dataset['cluster'] = kmeans.labels_
             count = Counter(kmeans.labels_)
+            print("cam_x"+str(cam_x))
+            print("cam_y"+str(cam_y))
             #print(good_matches_xy)
             print(sorted(count.items(), key=itemgetter(1), reverse=True))
             count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
@@ -284,6 +300,7 @@ while cap.isOpened():
             counter = 0
             cam_gps_lat_sum = 0
             cam_gps_long_sum = 0
+            cluster_matches = []
             for row in y.itertuples():
                 #print(row)
                 x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * (180 / math.pi)
@@ -297,6 +314,7 @@ while cap.isOpened():
                     print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size))
                     print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size))
                     best_match_idx = row.Index
+                    cluster_matches.append(good_matches[row.Index])
                     cam_gps_lat = still_gps_lat - ((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi)
                     cam_gps_long = still_gps_long + ((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
                     cam_gps_lat_sum += cam_gps_lat
@@ -315,6 +333,8 @@ while cap.isOpened():
 
             cam_gps_lat = cam_gps_lat_sum / counter
             cam_gps_long = cam_gps_long_sum / counter
+            drone_lat = vehicle.location.global_relative_frame.lat
+            drone_lon = abs(vehicle.location.global_relative_frame.lon)
 
             gps_error = get_distance_metres(cam_gps_lat, cam_gps_long, drone_lat, drone_lon)
             print("GPS error: "+str(gps_error))
@@ -334,7 +354,7 @@ while cap.isOpened():
             # 9. Draw the matches
             #print(good_matches[best_match_idx])
             #print(good_matches)
-            matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
+            matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, cluster_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
 
             # Show the matched image
             vid_matches.write(matched_img)
