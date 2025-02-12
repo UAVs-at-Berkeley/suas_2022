@@ -2,17 +2,21 @@ import cv2
 import numpy as np
 
 def leftRightStitch(img1, img2):
+
+    #gets the difference in x pixels between two points in a SIFT matching.
     def getDeltaX(m):
         lx = kp1[m.queryIdx].pt[0]
         rx = kp2[m.trainIdx].pt[0]
         deltax = rx+abs(w1-lx)
         return deltax
+    #gets the difference in y pixels between two points
     def getDeltaY(m):
         ly = kp1[m.queryIdx].pt[1]
         ry = kp2[m.trainIdx].pt[1]
         deltay = ry-ly
         return deltay
     
+    #get height and width
     h1, w1 = img1.shape[:2]
     h2, w2 = img2.shape[:2]
     # Read the images to be stitched
@@ -33,16 +37,17 @@ def leftRightStitch(img1, img2):
     matches = matches[:10]
     #matches = list(filter(lambda m: getDeltaX(m) < 250, matches))
 
-
+    """
     img_matches = cv2.drawMatches(
-        img1, kp1, img2, kp2, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        #img1, kp1, img2, kp2, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
     cv2.imwrite('test.png', img_matches)
+    """
     #cv2.waitKey(0)
     #cv2.destroyAllWindows()
     # Extract location of good matches
-    src_pts = [kp1[m.queryIdx].pt for m in matches]
-    dst_pts = [kp2[m.trainIdx].pt for m in matches]
+    #src_pts = [kp1[m.queryIdx].pt for m in matches]
+    #dst_pts = [kp2[m.trainIdx].pt for m in matches]
 
     #leftcrop = int(sum([w1-p[0] for p in src_pts])/len(src_pts))
     #rightcrop = int(sum([p[0] for p in dst_pts])/len(dst_pts))
@@ -56,24 +61,29 @@ def leftRightStitch(img1, img2):
 
     #print(hcrop, vshift)
     if vshift > 0:
-        img1 = np.concatenate((np.zeros((vshift, w1, 3), dtype=np.uint8), img1),axis=0)
+        #img1 = np.concatenate((np.zeros((vshift, w1, 3), dtype=np.uint8), img1),axis=0)
+        img1 = cv2.copyMakeBorder(img1, vshift, 0, 0, 0, cv2.BORDER_CONSTANT)
         h1+=vshift
         #newH = min(vshift+h1, h2)
     elif vshift < 0:
-        img2 = np.concatenate((np.zeros((-vshift, w2, 3), dtype=np.uint8), img2),axis=0)
+        #img2 = np.concatenate((np.zeros((-vshift, w2, 3), dtype=np.uint8), img2),axis=0)
+        img2 = cv2.copyMakeBorder(img2, -vshift, 0, 0, 0, cv2.BORDER_CONSTANT)
         h2+=(-vshift)
         #newH = min(-vshift+h2, h1)
-    if h2 > h1:
-        img1 = np.concatenate((img1, np.zeros((h2-h1, w1, 3), dtype=np.uint8)),axis=0)
-    elif h1 > h2:
 
-        img2 = np.concatenate((img2, np.zeros((h1-h2, w2, 3), dtype=np.uint8)),axis=0)
+    if h2 > h1:
+        img1 = cv2.copyMakeBorder(img1, 0, h2-h1, 0, 0, cv2.BORDER_CONSTANT)
+        # img1 = np.concatenate((img1, np.zeros((h2-h1, w1, 3), dtype=np.uint8)),axis=0)
+    elif h1 > h2:
+        img2 = cv2.copyMakeBorder(img2, 0, h1-h2, 0, 0, cv2.BORDER_CONSTANT)
+        #img2 = np.concatenate((img2, np.zeros((h1-h2, w2, 3), dtype=np.uint8)),axis=0)
     
     img1 = img1[0:, 0:-hcrop]
     #img1 = img1[:newH, 0:-hcrop]
     #img2 = img2[:newH]
 
-    return np.concatenate((img1, img2), axis=1)
+    return cv2.hconcat((img1, img2)) 
+    #np.concatenate((img1, img2), axis=1)
 
 
 #img1 = cv2.imread('12-picture-map-test/1-1.png')
@@ -82,7 +92,7 @@ def stitchRow(imgArr):
     result = imgArr[0]
     i = 0
     for img in imgArr[1:]:
-        result = leftRightStitch(np.copy(result), img)
+        result = leftRightStitch(result, img)
         print(f"stitched together images {i} and {i+1} successfully")
         i+=1
     return result
