@@ -1,13 +1,13 @@
 import cv2
 import numpy as np
 
-def leftRightStitch(img1, img2):
+def leftRightStitch(img1, img2, px=1, py=1):
 
     #gets the difference in x pixels between two points in a SIFT matching.
     def getDeltaX(m):
         lx = kp1[m.queryIdx].pt[0]
         rx = kp2[m.trainIdx].pt[0]
-        deltax = rx+abs(w1-lx)
+        deltax = rx+abs(partialx1-lx)
         return deltax
     #gets the difference in y pixels between two points
     def getDeltaY(m):
@@ -25,24 +25,31 @@ def leftRightStitch(img1, img2):
     sift = cv2.SIFT_create()
 
     # Detect keypoints and descriptors
-    kp1, des1 = sift.detectAndCompute(img1, None)
-    kp2, des2 = sift.detectAndCompute(img2, None)
+    partialx1 = int(w1*px)
+    partialx2 = int(w2*px)
+    partialy1 = int(h1*(py)/2)
+    partialy2 = int(h2*(py)/2)
+    pimg1 = img1[h1//2-partialy1:h1//2+partialy1, w1-partialx1:]
+    pimg2 = img2[h2//2-partialy2:h2//2+partialy2, 0:partialx2]
+    
+    kp1, des1 = sift.detectAndCompute(pimg1, None)
+    kp2, des2 = sift.detectAndCompute(pimg2, None)
 
     # Use BFMatcher to find matches
     bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
     matches = bf.match(des1, des2)
 
     # Sort matches by distance
-    matches = sorted(matches, key=lambda m: getDeltaX(m))
+    matches = sorted(matches, key=lambda m: getDeltaX(m)**2+getDeltaY(m))
     matches = matches[:10]
     #matches = list(filter(lambda m: getDeltaX(m) < 250, matches))
 
-    """
+    
     img_matches = cv2.drawMatches(
-        #img1, kp1, img2, kp2, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        pimg1, kp1, pimg2, kp2, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
     cv2.imwrite('test.png', img_matches)
-    """
+    
     #cv2.waitKey(0)
     #cv2.destroyAllWindows()
     # Extract location of good matches
@@ -88,19 +95,19 @@ def leftRightStitch(img1, img2):
 
 #img1 = cv2.imread('12-picture-map-test/1-1.png')
 #img2 = cv2.imread('12-picture-map-test/1-2.png')
-def stitchRow(imgArr):
+def stitchRow(imgArr, px, py=1):
     result = imgArr[0]
     i = 0
     for img in imgArr[1:]:
-        result = leftRightStitch(result, img)
+        result = leftRightStitch(result, img, px, py)
         print(f"stitched together images {i} and {i+1} successfully")
         i+=1
     return result
 
 def stitchMatrix(imgMatrix):
-    rowImages = [stitchRow(row) for row in imgMatrix]
+    rowImages = [stitchRow(row, 0.2) for row in imgMatrix]
     rotatedImages = [cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE) for img in rowImages]
-    rotatedResult = stitchRow(rotatedImages)
+    rotatedResult = stitchRow(rotatedImages, 0.2, 0.2)
     result = cv2.rotate(rotatedResult, cv2.ROTATE_90_CLOCKWISE)
     return result
 
