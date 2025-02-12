@@ -7,6 +7,11 @@ def leftRightStitch(img1, img2):
         rx = kp2[m.trainIdx].pt[0]
         deltax = rx+abs(w1-lx)
         return deltax
+    def getDeltaY(m):
+        ly = kp1[m.queryIdx].pt[1]
+        ry = kp2[m.trainIdx].pt[1]
+        deltay = ry-ly
+        return deltay
     
     h1, w1 = img1.shape[:2]
     h2, w2 = img2.shape[:2]
@@ -42,24 +47,31 @@ def leftRightStitch(img1, img2):
     #leftcrop = int(sum([w1-p[0] for p in src_pts])/len(src_pts))
     #rightcrop = int(sum([p[0] for p in dst_pts])/len(dst_pts))
     pt_deltax = [getDeltaX(m) for m in matches]
-    print(pt_deltax)
-    pt_deltay = [-src_pts[i][1]+dst_pts[i][1] for i in range(min(len(src_pts), len(dst_pts)))]
+    #print(pt_deltax)
+    pt_deltay = [getDeltaY(m) for m in matches]
+    #pt_deltay = [-src_pts[i][1]+dst_pts[i][1] for i in range(min(len(src_pts), len(dst_pts)))]
     hcrop = int(sum(pt_deltax)/len(pt_deltax))
     vshift = int(sum(pt_deltay)/len(pt_deltay))
     #if second image is "lower" than first image, vshift will be positive
 
-    print(hcrop, vshift)
+    #print(hcrop, vshift)
     if vshift > 0:
         img1 = np.concatenate((np.zeros((vshift, w1, 3), dtype=np.uint8), img1),axis=0)
-        newH = min(vshift+h1, h2)
+        h1+=vshift
+        #newH = min(vshift+h1, h2)
     elif vshift < 0:
         img2 = np.concatenate((np.zeros((-vshift, w2, 3), dtype=np.uint8), img2),axis=0)
-        newH = min(-vshift+h2, h1)
-    else:
-        newH = min(h2, h1)
+        h2+=(-vshift)
+        #newH = min(-vshift+h2, h1)
+    if h2 > h1:
+        img1 = np.concatenate((img1, np.zeros((h2-h1, w1, 3), dtype=np.uint8)),axis=0)
+    elif h1 > h2:
 
-    img1 = img1[:newH, 0:-hcrop]
-    img2 = img2[:newH]
+        img2 = np.concatenate((img2, np.zeros((h1-h2, w2, 3), dtype=np.uint8)),axis=0)
+    
+    img1 = img1[0:, 0:-hcrop]
+    #img1 = img1[:newH, 0:-hcrop]
+    #img2 = img2[:newH]
 
     return np.concatenate((img1, img2), axis=1)
 
@@ -68,13 +80,27 @@ def leftRightStitch(img1, img2):
 #img2 = cv2.imread('12-picture-map-test/1-2.png')
 def stitchRow(imgArr):
     result = imgArr[0]
+    i = 0
     for img in imgArr[1:]:
         result = leftRightStitch(np.copy(result), img)
+        print(f"stitched together images {i} and {i+1} successfully")
+        i+=1
     return result
 
+def stitchMatrix(imgMatrix):
+    rowImages = [stitchRow(row) for row in imgMatrix]
+    rotatedImages = [cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE) for img in rowImages]
+    rotatedResult = stitchRow(rotatedImages)
+    result = cv2.rotate(rotatedResult, cv2.ROTATE_90_CLOCKWISE)
+    return result
+
+
+    
 #result = leftRightStitch(img1, img2)
 r = 3
 c = 4
 imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
-#cv2.imwrite('result.png', leftRightStitch(imgArr[0][0], imgArr[0][1]))
-cv2.imwrite('result.png', stitchRow(imgArr[0]))
+cv2.imwrite('result.png', leftRightStitch(imgArr[2][0], imgArr[2][1]))
+#cv2.imwrite('result.png', stitchRow(imgArr[0]))
+#cv2.imwrite('result.png', stitchMatrix(imgArr))
+
