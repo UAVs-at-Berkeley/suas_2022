@@ -100,7 +100,7 @@ def stitchMatrix(imgMatrix):
 r = 3
 c = 4
 imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
-cv2.imwrite('result.png', leftRightStitch(imgArr[2][0], imgArr[2][1]))
+#cv2.imwrite('result.png', leftRightStitch(imgArr[2][0], imgArr[2][1]))
 #cv2.imwrite('result.png', stitchRow(imgArr[0]))
-#cv2.imwrite('result.png', stitchMatrix(imgArr))
+cv2.imwrite('result.png', stitchMatrix(imgArr))
 
