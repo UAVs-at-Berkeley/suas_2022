@@ -110,18 +110,21 @@ def stitchRow(imgArr, px, py=1):
 def stitchMatrix(imgMatrix):
     rowImages = [stitchRow(row, 0.2) for row in imgMatrix]
     rotatedImages = [cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE) for img in rowImages]
-    rotatedResult = stitchRow(rotatedImages, 0.4, 0.1)
+    rotatedResult = stitchRow(rotatedImages, 0.2, 1)
     result = cv2.rotate(rotatedResult, cv2.ROTATE_90_CLOCKWISE)
     return result
 
 
     
 #result = leftRightStitch(img1, img2)
-r = 3
-c = 4
-imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
-#imgArr = [[cv2.imread(f'2/({j}, {i}).png') for j in range(c)] for i in range(r)]
+
+COLS = int(input("Columns: "))
+ROWS = int(input("Rows: "))
+DIRECTORY = input("Enter the path destination of the cut images: ").replace("\\", "/")
+IMG_PATH = input("Enter the path of the output image: ").replace("\\", "/")
+#imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
+imgArr = [[cv2.imread(f'{DIRECTORY}/({i}, {j}).png') for j in range(COLS)] for i in range(ROWS)]
 #cv2.imwrite('result.png', leftRightStitch(imgArr[2][0], imgArr[2][1]))
 #cv2.imwrite('result.png', stitchRow(imgArr[0]))
-cv2.imwrite('result.png', stitchMatrix(imgArr))
+cv2.imwrite(IMG_PATH, stitchMatrix(imgArr))
 
