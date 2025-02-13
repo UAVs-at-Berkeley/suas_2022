@@ -40,7 +40,8 @@ def leftRightStitch(img1, img2, px=1, py=1):
     matches = bf.match(des1, des2)
 
     # Sort matches by distance
-    matches = sorted(matches, key=lambda m: getDeltaX(m)**2+getDeltaY(m))
+    matches = filter(lambda m: getDeltaY(m) < 200, matches)
+    matches = sorted(matches, key=lambda m: getDeltaX(m)**2+getDeltaY(m)**2)
     matches = matches[:10]
     #matches = list(filter(lambda m: getDeltaX(m) < 250, matches))
 
@@ -107,16 +108,17 @@ def stitchRow(imgArr, px, py=1):
 def stitchMatrix(imgMatrix):
     rowImages = [stitchRow(row, 0.2) for row in imgMatrix]
     rotatedImages = [cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE) for img in rowImages]
-    rotatedResult = stitchRow(rotatedImages, 0.2, 0.2)
+    rotatedResult = stitchRow(rotatedImages, 0.4, 0.1)
     result = cv2.rotate(rotatedResult, cv2.ROTATE_90_CLOCKWISE)
     return result
 
 
     
 #result = leftRightStitch(img1, img2)
-r = 3
-c = 4
-imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
+r = 4
+c = 5
+#imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
+imgArr = [[cv2.imread(f'1/({j}, {i}).png') for j in range(c)] for i in range(r)]
 #cv2.imwrite('result.png', leftRightStitch(imgArr[2][0], imgArr[2][1]))
 #cv2.imwrite('result.png', stitchRow(imgArr[0]))
 cv2.imwrite('result.png', stitchMatrix(imgArr))
