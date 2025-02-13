@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 
+
+
 def leftRightStitch(img1, img2, px=1, py=1):
 
     #gets the difference in x pixels between two points in a SIFT matching.
@@ -115,10 +117,10 @@ def stitchMatrix(imgMatrix):
 
     
 #result = leftRightStitch(img1, img2)
-r = 4
-c = 5
-#imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
-imgArr = [[cv2.imread(f'1/({j}, {i}).png') for j in range(c)] for i in range(r)]
+r = 3
+c = 4
+imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
+#imgArr = [[cv2.imread(f'2/({j}, {i}).png') for j in range(c)] for i in range(r)]
 #cv2.imwrite('result.png', leftRightStitch(imgArr[2][0], imgArr[2][1]))
 #cv2.imwrite('result.png', stitchRow(imgArr[0]))
 cv2.imwrite('result.png', stitchMatrix(imgArr))
