@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from statistics import median
 
 KING_SIZE = (1920, 1080)
 def enforceResize(img):
@@ -61,21 +62,24 @@ def getSiftAlignment(img1, img2, overlapx, startyfrac, endyfrac):
 
     if len(matches) == 0:
         print("no matches found, just concatenating")
-        return (OVERLAP_X//2, OVERLAP_X//2, 0)
+        return (overlapx//2, overlapx//2, 0)
 
     pt_LRx = [getLeftRightX(m, kp1, kp2, partialx1) for m in matches]
     pt_Lx = [x[0] for x in pt_LRx]
     pt_Rx = [x[1] for x in pt_LRx]
     pt_deltay = [getDeltaY(m, kp1, kp2) for m in matches]
     #hcrop = int(sum(pt_deltax)/len(pt_deltax))
-    lx = int(sum(pt_Lx)/len(pt_Lx))
-    rx = int(sum(pt_Rx)/len(pt_Rx))
-    vshift = int(sum(pt_deltay)/len(pt_deltay))
+    #lx = int(sum(pt_Lx)/len(pt_Lx))
+    #rx = int(sum(pt_Rx)/len(pt_Rx))
+    lx = int(median(pt_Lx))
+    rx = int(median(pt_Rx))
+    #vshift = int(sum(pt_deltay)/len(pt_deltay))
+    vshift = int(median(pt_deltay))
     if abs(vshift) > OVERLAP_Y:
         print("hmm, massive vshift. throwing it out")
         #print([(kp1[m.queryIdx].pt[1], kp2[m.trainIdx].pt[1]) for m in matches])
         #print([getDeltaY(m, kp1, kp2) for m in matches])
-        return (OVERLAP_X//2, OVERLAP_X//2, 0)
+        return (overlapx//2, overlapx//2, 0)
     return (lx, rx, vshift)
 
 
@@ -118,13 +122,16 @@ def stitchRow(imgArr, overlapx):
 
 def stitchMatrix(imgMatrix):
     total_w = sum([x.shape[1] for x in imgMatrix[0]])
+    total_h = sum([r[0].shape[0] for r in imgMatrix])
     typical_h = imgMatrix[0][0].shape[0]
+    
 
     rowImages = [stitchRow(row, OVERLAP_X) for row in imgMatrix]
     rowImages = [cv2.resize(img, (total_w, typical_h), interpolation = cv2.INTER_LINEAR) for img in rowImages]
     rotatedImages = [cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE) for img in rowImages]
     rotatedResult = stitchRow(rotatedImages, OVERLAP_Y)
     result = cv2.rotate(rotatedResult, cv2.ROTATE_90_CLOCKWISE)
+    result = cv2.resize(result, (total_w, total_h), interpolation = cv2.INTER_LINEAR)
     return result
 
 
@@ -143,6 +150,8 @@ DIRECTORY = "runway1"
 IMG_PATH = "result.png"
 OVERLAP_X = int(0.03*KING_SIZE[0])
 OVERLAP_Y = int(0.06*KING_SIZE[1])
+#OVERLAP_X = int(0.2*KING_SIZE[0])
+#OVERLAP_Y = int(0.1*KING_SIZE[1])
 
 
 #imgArr = [[cv2.imread(f'12-picture-map-test/{i}-{j}.png') for j in range(1,c+1)] for i in range(1, r+1)]
