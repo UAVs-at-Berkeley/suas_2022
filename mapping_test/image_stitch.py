@@ -24,11 +24,9 @@ def getDeltaY(m, kp1, kp2):
     deltay = ry-ly
     return deltay
 
-def getSiftAlignment(img1, img2, overlapx, startyfrac, endyfrac):
+def getSiftAlignment(img1, img2, overlapx, vertical_threshold):
     #get height and width
     h, w1 = img1.shape[:2]
-    #h, w = img1.shape[:2]
-    # Read the images to be stitched
 
     # Initialize SIFT detector
     sift = cv2.SIFT_create()
@@ -36,8 +34,8 @@ def getSiftAlignment(img1, img2, overlapx, startyfrac, endyfrac):
     # Detect keypoints and descriptors
     partialx1 = overlapx
     partialx2 = overlapx
-    partialy1 = int(h*startyfrac)
-    partialy2 = int(h*endyfrac)
+    partialy1 = 0
+    partialy2 = h
     pimg1 = img1[partialy1:partialy2, w1-partialx1:]
     pimg2 = img2[partialy1:partialy2, 0:partialx2]
     
@@ -49,11 +47,11 @@ def getSiftAlignment(img1, img2, overlapx, startyfrac, endyfrac):
     matches = bf.match(des1, des2)
 
     # Sort matches by distance
-    matches = filter(lambda m: abs(getDeltaY(m, kp1, kp2)) < OVERLAP_Y, matches)
+    # Filter matches based on expected vertical alignment (images should be roughly aligned)
+    VERTICAL_THRESHOLD = vertical_threshold  # pixels of allowed vertical deviation
+    matches = filter(lambda m: abs(getDeltaY(m, kp1, kp2)) < VERTICAL_THRESHOLD, matches)
     matches = sorted(matches, key=lambda m: getDeltaX(m, kp1, kp2, partialx1)**2+getDeltaY(m, kp1, kp2)**2)
     matches = matches[:10]
-    #matches = list(filter(lambda m: getDeltaX(m) < 250, matches))
-
     
     img_matches = cv2.drawMatches(
         pimg1, kp1, pimg2, kp2, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
@@ -62,35 +60,35 @@ def getSiftAlignment(img1, img2, overlapx, startyfrac, endyfrac):
 
     if len(matches) == 0:
         print("no matches found, just concatenating")
-        return (overlapx//2, overlapx//2, 0)
+        return (overlapx//2, overlapx//2, 0, 0)
 
     pt_LRx = [getLeftRightX(m, kp1, kp2, partialx1) for m in matches]
     pt_Lx = [x[0] for x in pt_LRx]
     pt_Rx = [x[1] for x in pt_LRx]
     pt_deltay = [getDeltaY(m, kp1, kp2) for m in matches]
-    #hcrop = int(sum(pt_deltax)/len(pt_deltax))
-    #lx = int(sum(pt_Lx)/len(pt_Lx))
-    #rx = int(sum(pt_Rx)/len(pt_Rx))
+    
     lx = int(median(pt_Lx))
     rx = int(median(pt_Rx))
-    #vshift = int(sum(pt_deltay)/len(pt_deltay))
     vshift = int(median(pt_deltay))
-    if abs(vshift) > OVERLAP_Y:
+    
+    if abs(vshift) > VERTICAL_THRESHOLD:
         print("hmm, massive vshift. throwing it out")
-        #print([(kp1[m.queryIdx].pt[1], kp2[m.trainIdx].pt[1]) for m in matches])
-        #print([getDeltaY(m, kp1, kp2) for m in matches])
-        return (overlapx//2, overlapx//2, 0)
-    return (lx, rx, vshift)
-
+        return (overlapx//2, overlapx//2, 0, 0)
+        
+    return (lx, rx, vshift, 0)
 
 def leftRightStitch(img1, img2, overlapx):
-
-    sA = getSiftAlignment(img1, img2, overlapx, 0, 1)
+    sA = getSiftAlignment(img1, img2, overlapx, 30)
     hcrop = sA[0]+sA[1]
     vshift = sA[2]
-    #if second image is "lower" than first image, vshift will be positive
+    rotation = sA[3]
 
-    #print(sA)
+    # Apply rotation to img2 if needed
+    if abs(rotation) > 0:
+        center = (img2.shape[1]//2, img2.shape[0]//2)
+        M = cv2.getRotationMatrix2D(center, rotation, 1.0)
+        img2 = cv2.warpAffine(img2, M, (img2.shape[1], img2.shape[0]))
+
     if vshift > 0:
         img1 = cv2.copyMakeBorder(img1, vshift, 0, 0, 0, cv2.BORDER_CONSTANT)
         img1 = img1[:-vshift]
@@ -98,16 +96,10 @@ def leftRightStitch(img1, img2, overlapx):
         img2 = cv2.copyMakeBorder(img2, -vshift, 0, 0, 0, cv2.BORDER_CONSTANT)
         img2 = img2[:vshift]
     
-    #print(img1.shape, img2.shape)
-    #print(vshift)
     img1 = img1[0:, 0:-sA[0]]
     img2 = img2[0:, sA[1]:]
-    #img1 = img1[:newH, 0:-hcrop]
-    #img2 = img2[:newH]
-    #print(img1.shape, img2.shape)
-    return cv2.hconcat((img1, img2)) 
-    #np.concatenate((img1, img2), axis=1)
-
+    
+    return cv2.hconcat((img1, img2))
 
 #img1 = cv2.imread('12-picture-map-test/1-1.png')
 #img2 = cv2.imread('12-picture-map-test/1-2.png')
@@ -148,8 +140,8 @@ COLS = 4
 ROWS = 3
 DIRECTORY = "runway1"
 IMG_PATH = "result.png"
-OVERLAP_X = int(0.03*KING_SIZE[0])
-OVERLAP_Y = int(0.06*KING_SIZE[1])
+OVERLAP_X = int(0.14*KING_SIZE[0])
+OVERLAP_Y = int(0.18*KING_SIZE[1])
 #OVERLAP_X = int(0.2*KING_SIZE[0])
 #OVERLAP_Y = int(0.1*KING_SIZE[1])
 

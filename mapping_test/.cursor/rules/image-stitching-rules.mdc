@@ -18,7 +18,7 @@ description: Core requirements and constraints for the image stitching system
 
 metadata:
   competition: true
-  version: 1.0
+  version: 1.1
   priority: high
 
 # Core System Requirements
@@ -56,6 +56,14 @@ constraints:
     - Must handle slight variations in overlap amount
     - Should detect and reject invalid matches
 
+  rotation_handling:
+    - OVERLAP_Y should NOT be used for filtering matches in horizontal stitching
+    - Do NOT rely on specific image features (like runways) for alignment
+    - Do NOT use number of matches alone as rotation quality metric
+    - Do NOT attempt to estimate full homography matrix (too general)
+    - Rotation estimation must be robust across different terrains and features
+    - Must maintain straight lines and avoid distortion at seams
+
   error_handling:
     - Must have fallback mechanisms when matching fails
     - Should log/visualize matching results for debugging
@@ -72,7 +80,9 @@ test_scenarios:
     - Rotated images (±5°)
     - Slight zoom variations
     - Variable lighting conditions
-    - Real runway test images
+    - Different terrain types (not just runways)
+    - Low-feature areas
+    - High-feature areas
 
 # Future Enhancements
 planned_improvements:
