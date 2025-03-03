@@ -4,16 +4,6 @@ globs:
 alwaysApply: false
 ---
 ---
-description: 
-globs: 
-alwaysApply: false
----
----
-description: Rules and requirements for the UAV image stitching system used in drone competitions.
-globs: 
-alwaysApply: false
----
----
 description: Rules and constraints for the drone competition image stitching system
 globs: ["*.py"]
 alwaysApply: true
