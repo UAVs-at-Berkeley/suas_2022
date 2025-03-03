@@ -4,6 +4,11 @@ globs:
 alwaysApply: false
 ---
 ---
+description: 
+globs: 
+alwaysApply: false
+---
+---
 description: Rules and requirements for the UAV image stitching system used in drone competitions.
 globs: 
 alwaysApply: false
@@ -94,5 +99,23 @@ examples:
   - scenario: "Rotated Images"
     description: "Images with ±5° rotation"
     expected: "Correct alignment and stitching despite rotation"
+
+# Debug Output Requirements
+debug_output:
+  directory:
+    - All debug images must be saved to the "debug/" directory
+    - Directory should be created if it doesn't exist
+    - Directory should be cleared before each new stitching operation
+  
+  naming_conventions:
+    - Horizontal matches: "debug/match_horizontal_r{row}c{col1}_c{col2}.png"
+    - Vertical matches: "debug/match_vertical_r{row1}_r{row2}.png"
+    - Fallback naming: "debug/match_{timestamp}.png"
+  
+  content:
+    - Must include match visualization
+    - Must include relevant statistics and parameters
+    - Should indicate position in image grid
+    - Should show transformation parameters when relevant
 
 </rule> 
