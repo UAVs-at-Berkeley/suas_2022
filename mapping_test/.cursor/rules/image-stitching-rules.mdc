@@ -1,4 +1,9 @@
 ---
+description: 
+globs: 
+alwaysApply: false
+---
+---
 description: Rules and requirements for the UAV image stitching system used in drone competitions.
 globs: 
 alwaysApply: false
@@ -31,8 +36,8 @@ requirements:
   grid_structure:
     - Images are taken in a 4x3 grid pattern
     - Known overlap between adjacent images:
-      - Horizontal: 3% of image width
-      - Vertical: 6% of image height
+      - Horizontal: 14% of image width
+      - Vertical: 18% of image height
     - Grid structure must be maintained in final output
 
   alignment:
@@ -51,8 +56,8 @@ constraints:
     - Should maintain grid structure while allowing for minor adjustments
 
   overlap_handling:
-    - Horizontal overlap: 3% of KING_SIZE width
-    - Vertical overlap: 6% of KING_SIZE height
+    - Horizontal overlap: 14% of KING_SIZE width
+    - Vertical overlap: 18% of KING_SIZE height
     - Must handle slight variations in overlap amount
     - Should detect and reject invalid matches
 
