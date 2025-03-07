@@ -1,3 +1,6 @@
 [submodule "yolov5"]
 	path = yolov5
 	url = https://github.com/ultralytics/yolov5.git
+[submodule "siyi_sdk"]
+	path = siyi_sdk
+	url = https://github.com/mzahana/siyi_sdk.git
