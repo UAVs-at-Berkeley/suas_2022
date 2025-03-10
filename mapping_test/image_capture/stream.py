@@ -25,6 +25,7 @@ import logging
 from time import time, sleep
 import threading
 import platform
+import subprocess
 
 class SIYIRTSP:
     def __init__(self, rtsp_url="rtsp://192.168.144.25:8554/main.264", cam_name="ZR10", debug=False, use_udp=True) -> None:
@@ -72,10 +73,6 @@ class SIYIRTSP:
 
         # Start stream
         self.start()
-
-    def resize(self, width, height):
-        self._width = width
-        self._height = height
 
     def setShowWindow(self, f: bool):
         self._show_window = f
@@ -338,10 +335,11 @@ def test():
     # rtsp = SIYIRTSP(debug=False)
     # rtsp.setShowWindow(True)
     # Webcam
-    try:
-        wc = VideoStream(src=0).start()
-    except Exception as e:
-        print("Error in opening webcam")
+    #wc = VideoStream(src=0).start()
+    rtsp_url = "rtsp://192.168.144.25:8554/main.264"
+    cap = cv2.VideoCapture(rtsp_url)
+    if not cap.isOpened():
+        print("No connection")
         exit(1)
 
     rtmp = RTMPSender(rtmp_url="rtmp://127.0.0.1:1935/live/webcam")
@@ -349,12 +347,12 @@ def test():
     try:
         while(True):
             # frame=stream.getFrame()
-            frame=wc.read()
+            ret, frame = cap.read()
             rtmp.setFrame(frame)
     except KeyboardInterrupt:
         # rtsp.close()
         rtmp.stop()
-        wc.stop()
+        cap.release()
         cv2.destroyAllWindows()
         # quit
         exit(0)
