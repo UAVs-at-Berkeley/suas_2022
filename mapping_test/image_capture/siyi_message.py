@@ -24,7 +24,7 @@ class HardwareIDMsg:
     # x78: ZR30
     # x82: ZT6
     # x7A: ZT30
-    CAM_DICT ={'6B': 'ZR10', '73': 'A8 mini', '75': 'A2 mini', '78': 'ZR30', '82': 'ZT6', '7A': 'ZT30'}
+    CAM_DICT ={'63': 'ZR10', '73': 'A8 mini', '75': 'A2 mini', '78': 'ZR30', '82': 'ZT6', '7A': 'ZT30'}
     seq=0
     id=''
     cam_type_str=''

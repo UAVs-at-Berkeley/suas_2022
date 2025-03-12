@@ -722,6 +722,7 @@ class SIYISDK:
             
             # The numbers are reversed
             cam_id = msg[1]+msg[0]
+
             try:
                 self._hw_msg.cam_type_str = self._hw_msg.CAM_DICT[cam_id]
             except Exception as e:

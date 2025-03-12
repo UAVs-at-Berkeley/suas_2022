@@ -92,7 +92,7 @@ import argparse
 
 rtsp_url = "rtsp://192.168.144.25:8554/main.264"
 cap = cv2.VideoCapture(rtsp_url)
-time.sleep(15)
+time.sleep(1)
 
 while cap.isOpened():
     image_capture.capture_image_and_save(stream=cap)

@@ -28,7 +28,7 @@ import platform
 import subprocess
 
 class SIYIRTSP:
-    def __init__(self, rtsp_url="rtsp://192.168.144.25:8554/main.264", cam_name="ZR10", debug=False, use_udp=True) -> None:
+    def __init__(self, rtsp_url="rtsp://192.168.144.25:8554/main.264", cam_name="ZR10", debug=False, use_udp=False) -> None:
         '''
         Receives video stream from SIYI cameras
 
@@ -132,7 +132,9 @@ class SIYIRTSP:
     def loop(self):
         self._last_image_time = time()
 
+
         while not self._stopped:
+
             ret, self._frame = self._stream.read()
 
             if not ret:
@@ -150,6 +152,7 @@ class SIYIRTSP:
                 timestamp = time() * 1000  # Convert seconds to milliseconds for consistency
             self._logger.debug(f"Frame timestamp: {timestamp} ms")
 
+
             if self._show_window:
                 cv2.imshow('{} Stream'.format(self._cam_name), self._frame)
                 key = cv2.waitKey(1) & 0xFF
@@ -157,8 +160,9 @@ class SIYIRTSP:
                     self.close()
                     break
 
+
             # Optimized delay to avoid overwhelming CPU while reducing latency
-            sleep(0.001)
+            sleep(1)
 
         self._logger.warning("RTSP receiving loop is done")
         return
