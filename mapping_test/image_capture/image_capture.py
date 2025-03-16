@@ -2,9 +2,11 @@ import cv2
 import os
 import numpy as np
 import time
+import threading
 
-from stream import SIYIRTSP
-from siyi_sdk import SIYISDK
+# from stream import SIYIRTSP
+# from siyi_sdk import SIYISDK
+from new_mapping_library import VideoStream
 
 PATH_OF_SCRIPT = os.path.dirname(os.path.abspath(__file__)) #local directory, NOT the working directory
 DUMMY_IMAGE = np.full((100, 100, 3), 255, dtype=np.uint8)
@@ -37,27 +39,39 @@ RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
 #     cv2.imwrite(f'{PATH_OF_SCRIPT}/{i}.png', frame)
 
 
-def capture_image_and_save(dimensions = (None, None)):    
-    i = 0
+# def capture_image_and_save(dimensions = (None, None)):    
+#     i = 0
 
-    cam = SIYISDK(server_ip=CAMERA_SERVER_IP, port=CAMERA_PORT)
-    cam.connect()
+#     cam = SIYISDK(server_ip=CAMERA_SERVER_IP, port=CAMERA_PORT)
+#     cam.connect()
 
-    if not cam.isConnected():
-        print("No connection ")
-        exit(1)
+#     if not cam.isConnected():
+#         print("No connection ")
+#         exit(1)
 
-    # Get camera name
-    cam_str = cam.getCameraTypeString()
-    cam.disconnect()
+#     # Get camera name
+#     cam_str = cam.getCameraTypeString()
+#     cam.disconnect()
         
-    rtsp = SIYIRTSP(rtsp_url=RSTP_URL, debug=False, cam_name=cam_str)
-    if dimensions[0]:
-        rtsp.resize(dimensions[0], dimensions[1])
+#     rtsp = SIYIRTSP(rtsp_url=RSTP_URL, debug=False, cam_name=cam_str)
+#     if dimensions[0]:
+#         rtsp.resize(dimensions[0], dimensions[1])
 
-    rtsp.start()
-    frame = rtsp.getFrame()
+#     rtsp.start()
+#     frame = rtsp.getFrame()
 
+#     while os.path.exists(f"{PATH_OF_SCRIPT}/{i}.png"):
+#         i += 1
+#     cv2.imwrite(f'{PATH_OF_SCRIPT}/{i}.png', frame)
+
+def capture_image_and_save():    
+    video_stream = VideoStream(RSTP_URL)
+    video_stream.start_stream()
+    
+    time.sleep(2)
+    frame = video_stream.frame
+
+    i = 0
     while os.path.exists(f"{PATH_OF_SCRIPT}/{i}.png"):
         i += 1
     cv2.imwrite(f'{PATH_OF_SCRIPT}/{i}.png', frame)
