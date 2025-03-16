@@ -78,4 +78,3 @@ def capture_image_and_save():
 
 if __name__ == '__main__':
     capture_image_and_save()
-
