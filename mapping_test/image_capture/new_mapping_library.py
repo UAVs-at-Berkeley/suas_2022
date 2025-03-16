@@ -11,10 +11,11 @@ class VideoStream:
         ret, frame = self.stream.get()
         return frame
 
-    def start_stream(self): # start thread
+    def start_new_capture(self): 
         self.stream = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+    
+    def add_stream_reference(self, stream):
+        self.stream = stream
 
     def end_stream(self):
         self.stream.release()
-    
-

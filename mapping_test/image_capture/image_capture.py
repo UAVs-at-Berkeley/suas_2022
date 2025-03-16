@@ -64,12 +64,20 @@ RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
 #         i += 1
 #     cv2.imwrite(f'{PATH_OF_SCRIPT}/{i}.png', frame)
 
-def capture_image_and_save():    
+
+def capture_image_and_save(exisitng_video_capture = None):
+    """
+    Captures an image from the provided video capture via RTSP
+    If no video capture is provided, starts a new video caputre
+    """
     video_stream = VideoStream(RSTP_URL)
-    video_stream.start_stream()
-    
-    time.sleep(2)
-    frame = video_stream.frame
+    if video_stream == None:    
+        video_stream.start_new_caputer()
+        frame = video_stream.frame
+        video_stream.end_stream()
+    else:
+        video_stream.add_stream_reference(exisitng_video_capture)
+        frame = video_stream.frame
 
     i = 0
     while os.path.exists(f"{PATH_OF_SCRIPT}/{i}.png"):
