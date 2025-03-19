@@ -7,7 +7,7 @@ class VideoCaptureWrapper:
         self.frame = None
 
     def get_frame(self):
-        ret, frame = self.stream.read()
+        ret, frame = self.stream.get()
         return frame
 
     def start_new_capture(self): 
