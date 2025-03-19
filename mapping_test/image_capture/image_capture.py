@@ -1,12 +1,12 @@
 import cv2
 import os
 import numpy as np
-import time
+from time import sleep
 import threading
 
 # from stream import SIYIRTSP
 # from siyi_sdk import SIYISDK
-from new_mapping_library import VideoStream
+from new_mapping_library import VideoCaptureWrapper
 
 PATH_OF_SCRIPT = os.path.dirname(os.path.abspath(__file__)) #local directory, NOT the working directory
 DUMMY_IMAGE = np.full((100, 100, 3), 255, dtype=np.uint8)
@@ -65,24 +65,25 @@ RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
 #     cv2.imwrite(f'{PATH_OF_SCRIPT}/{i}.png', frame)
 
 
-def capture_image_and_save(exisitng_video_capture = None):
+def capture_image_and_save(existing_video_capture, coordinates = None):
     """
-    Captures an image from the provided video capture via RTSP
-    If no video capture is provided, starts a new video caputre
+    Captures an image from the provided video capture via RTSP and saves to the directory of this file \n
+    If no coordinates are provided, saves the image with the next available integer as the file name
     """
-    video_stream = VideoStream(RSTP_URL)
-    if video_stream == None:    
-        video_stream.start_new_caputer()
-        frame = video_stream.frame
-        video_stream.end_stream()
-    else:
-        video_stream.add_stream_reference(exisitng_video_capture)
-        frame = video_stream.frame
+    ret, frame = existing_video_capture.get()
 
-    i = 0
-    while os.path.exists(f"{PATH_OF_SCRIPT}/{i}.png"):
-        i += 1
-    cv2.imwrite(f'{PATH_OF_SCRIPT}/{i}.png', frame)
+    if coordinates:
+        cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(coordinates)}.png', frame)
+    else:
+        i = 0
+        while os.path.exists(f'{PATH_OF_SCRIPT}/{i}.png'):
+            i += 1
+        cv2.imwrite(f'{PATH_OF_SCRIPT}/{i}.png', frame)
 
 if __name__ == '__main__':
-    capture_image_and_save()
+    cap = cv2.VideoCapture(RSTP_URL)
+    sleep(3)
+    capture_image_and_save(cap)
+    capture_image_and_save(cap)
+    capture_image_and_save(cap)
+

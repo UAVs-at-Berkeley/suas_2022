@@ -1,10 +1,9 @@
 import cv2
-import threading
 
-class VideoStream:
+class VideoCaptureWrapper:
     def __init__(self, rtsp_url):
         self.rtsp_url = rtsp_url
-        self.stream = None
+        self.video_capture = None
         self.frame = None
 
     def get_frame(self):
@@ -12,10 +11,10 @@ class VideoStream:
         return frame
 
     def start_new_capture(self): 
-        self.stream = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+        self.video_capture = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
     
-    def add_stream_reference(self, stream):
-        self.stream = stream
+    def add_video_capture_reference(self, stream):
+        self.video_capture = stream
 
-    def end_stream(self):
-        self.stream.release()
+    def end_video_capture(self):
+        self.video_capture.release()

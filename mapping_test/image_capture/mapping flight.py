@@ -90,12 +90,15 @@ import argparse
 # Uses distance_to_current_waypoint(), a convenience function for finding the 
 #   distance to the next waypoint.
 
-rtsp_url = "rtsp://192.168.144.25:8554/main.264"
-cap = cv2.VideoCapture(rtsp_url)
-time.sleep(1)
+RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
+CAP = cv2.VideoCapture(RSTP_URL)
+time.sleep(5)
 
-while cap.isOpened():
-    image_capture.capture_image_and_save(stream=cap)
+# while cap.isOpened():
+#     image_capture.capture_image_and_save(stream=cap)
+
+image_capture.capture_image_and_save(exisitng_video_capture= RSTP_URL, coordinates= (0, 0))
+
 
 
 # while True:
