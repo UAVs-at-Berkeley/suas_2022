@@ -8,7 +8,7 @@ class VideoStream:
         self.frame = None
 
     def get_frame(self):
-        ret, frame = self.stream.get()
+        ret, frame = self.stream.read()
         return frame
 
     def start_stream(self): # start thread

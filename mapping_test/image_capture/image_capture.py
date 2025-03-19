@@ -66,10 +66,11 @@ RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
 
 def capture_image_and_save():    
     video_stream = VideoStream(RSTP_URL)
-    video_stream.start_stream()
+    threading.Thread(video_stream.start_stream())
     
-    time.sleep(2)
-    frame = video_stream.frame
+    time.sleep(5)
+
+    frame = video_stream.get_frame()
 
     i = 0
     while os.path.exists(f"{PATH_OF_SCRIPT}/{i}.png"):
