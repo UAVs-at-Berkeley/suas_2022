@@ -1,14 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-© Copyright 2015-2016, 3D Robotics.
-mission_basic.py: Example demonstrating basic mission operations including creating, clearing and monitoring missions.
-
-Full documentation is provided at https://dronekit-python.readthedocs.io/en/latest/examples/mission_basic.html
-"""
 # MIT License
-# Copyright (c) 2019-2022 JetsonHacks
 
 # Using a CSI camera (such as the Raspberry Pi Version 2) connected to a
 # NVIDIA Jetson Nano Developer Kit using OpenCV
