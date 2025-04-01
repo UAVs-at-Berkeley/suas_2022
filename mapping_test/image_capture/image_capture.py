@@ -6,7 +6,6 @@ import threading
 
 # from stream import SIYIRTSP
 # from siyi_sdk import SIYISDK
-from new_mapping_library import VideoCaptureWrapper
 
 PATH_OF_SCRIPT = os.path.dirname(os.path.abspath(__file__)) #local directory, NOT the working directory
 DUMMY_IMAGE = np.full((100, 100, 3), 255, dtype=np.uint8)
@@ -67,13 +66,13 @@ RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
 
 def capture_image_and_save(existing_video_capture, coordinates = None):
     """
-    Captures an image from the provided video capture via RTSP and saves to the directory of this file \n
-    If no coordinates are provided, saves the image with the next available integer as the file name
+    Captures an image from the provided video capture via RTSP and saves to the directory of this file with the provided coordinates \n
+    Without coordinates, simply assigns the next available integer and saves
     """
     ret, frame = existing_video_capture.read()
 
     if coordinates:
-        cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(coordinates)}.png', frame)
+        cv2.imwrite(f'{PATH_OF_SCRIPT}/({str(coordinates[0])}, {str(coordinates[1])}).png', frame)
     else:
         i = 0
         while os.path.exists(f'{PATH_OF_SCRIPT}/{i}.png'):
@@ -82,8 +81,6 @@ def capture_image_and_save(existing_video_capture, coordinates = None):
 
 if __name__ == '__main__':
     cap = cv2.VideoCapture(RSTP_URL)
-    sleep(3)
     capture_image_and_save(cap)
     capture_image_and_save(cap)
     capture_image_and_save(cap)
-
