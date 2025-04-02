@@ -12,7 +12,9 @@ def test():
     video_capture = cv2.VideoCapture(RSTP_URL)
     ensure_capture_not_gray(video_capture)
     capture_image_and_save(video_capture, (0, 0))
+    ensure_capture_not_gray(video_capture)
     capture_image_and_save(video_capture, (0, 1))
+    ensure_capture_not_gray(video_capture)
     capture_image_and_save(video_capture, (0, 2))
     capture_image_and_save(video_capture, (1, 0))
     capture_image_and_save(video_capture, (1, 1))
@@ -36,13 +38,23 @@ def test_dummy_photos_2():
 
 def ensure_capture_not_gray(video_capture):
     ret, frame = video_capture.read()
-    while choice(choice(frame)) == np.array([129, 129, 129]) and choice(choice(frame)) == np.array([129, 129, 129]) and choice(choice(frame)) == np.array([129, 129, 129]):
-        pass
+    while True:
+        gray_image = 0
+        for i in range(50):
+            pixel = choice(choice(frame))
+            if pixel[0] == pixel[1] and pixel[1] == pixel[2] and pixel[2] == 129:
+                gray_image += 1
+            else:
+                break
+        if gray_image == 0:
+            break
 
 if __name__ == '__main__':
-    test_dummy_photos_1()
-    stich_all(3, 3)
+    # test_dummy_photos_1()
+    # stich_all(3, 3)
 
     #test_dummy_photos_2()
     #stich_all(3, 3)
+
+    test()
 
