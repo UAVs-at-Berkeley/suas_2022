@@ -1,0 +1,93 @@
+---
+description: Rules and requirements for the UAV image stitching system used in drone competitions.
+globs: 
+alwaysApply: false
+---
+---
+description: Rules and constraints for the drone competition image stitching system
+globs: ["*.py"]
+alwaysApply: true
+---
+# Image Stitching System Rules
+
+Rules and requirements for the UAV image stitching system used in drone competitions.
+
+<rule>
+name: image_stitching_requirements
+description: Core requirements and constraints for the image stitching system
+
+metadata:
+  competition: true
+  version: 1.0
+  priority: high
+
+# Core System Requirements
+requirements:
+  image_format:
+    - All images must be 1920x1080 pixels (KING_SIZE)
+    - Input images that don't match this size must be resized
+    - Original aspect ratio should be maintained when possible
+  
+  grid_structure:
+    - Images are taken in a 4x3 grid pattern
+    - Known overlap between adjacent images:
+      - Horizontal: 3% of image width
+      - Vertical: 6% of image height
+    - Grid structure must be maintained in final output
+
+  alignment:
+    - No IMU/orientation data available for alignment
+    - Rough north alignment from compass (±5° accuracy)
+    - Must handle rotations up to ±5° between adjacent images
+    - Must handle slight zoom variations between images
+
+# Technical Constraints
+constraints:
+  sift_matching:
+    - Uses SIFT for feature detection and matching
+    - Must handle both horizontal and vertical stitching
+    - Should account for potential rotational differences
+    - Must be robust against false matches, especially on y-axis
+    - Should maintain grid structure while allowing for minor adjustments
+
+  overlap_handling:
+    - Horizontal overlap: 3% of KING_SIZE width
+    - Vertical overlap: 6% of KING_SIZE height
+    - Must handle slight variations in overlap amount
+    - Should detect and reject invalid matches
+
+  error_handling:
+    - Must have fallback mechanisms when matching fails
+    - Should log/visualize matching results for debugging
+    - Should handle edge cases gracefully
+
+# Test Cases
+test_scenarios:
+  basic:
+    - Perfect alignment case (current working scenario)
+    - Same size, zoom level, and alignment
+    - Clean overlap regions
+  
+  advanced:
+    - Rotated images (±5°)
+    - Slight zoom variations
+    - Variable lighting conditions
+    - Real runway test images
+
+# Future Enhancements
+planned_improvements:
+  - Enhanced SIFT matching with better outlier detection
+  - RANSAC-based transformation estimation
+  - Two-phase matching system
+  - Improved debug visualizations
+
+examples:
+  - scenario: "Perfect Alignment"
+    description: "Current working case with aligned images"
+    expected: "Clean stitching with minimal artifacts"
+  
+  - scenario: "Rotated Images"
+    description: "Images with ±5° rotation"
+    expected: "Correct alignment and stitching despite rotation"
+
+</rule> 

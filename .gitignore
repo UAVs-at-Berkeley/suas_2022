@@ -2,3 +2,9 @@
 *.mp4
 *.MOV
 *.avi
+tests/
+datasets/
+mannequins/
+yolov5
+__pycache__/
+bearcopter_electronics/bearcopter_electronics-backups/
