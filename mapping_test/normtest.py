@@ -18,4 +18,3 @@ evo = EXPECTED_V_OVERLAP
 
 total_w = sum([x.shape[1] for x in imgArr[0]])
 total_h = sum([r[0].shape[0] for r in imgArr])
-
