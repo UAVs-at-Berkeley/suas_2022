@@ -1,5 +1,5 @@
 from image_capture_modified import capture_image_and_save
-from image_stitcher import stich_all
+from image_stitcher import stitch_all
 from random import choice
 from threading import Thread
 from time import sleep
@@ -53,10 +53,10 @@ def ensure_capture_not_gray(video_capture):
 
 if __name__ == '__main__':
     # test_dummy_photos_1()
-    # stich_all(3, 3)
+    # stitch_all(3, 3)
 
-    #test_dummy_photos_2()
-    #stich_all(3, 3)
+    test_dummy_photos_2()
+    stitch_all(4, 3)
 
-    test()
+    #test()
 
