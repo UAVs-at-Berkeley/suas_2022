@@ -167,6 +167,7 @@ utils.write_missionlist("mapping.txt", cmds)
 sitl = None
 cap = None
 rtmp = None
+video_maker = None
 
 #if no connection string start sitl
 if not connection_string:
@@ -193,6 +194,10 @@ if not cap.isOpened():
 if show_stream:
     rtmp = RTMPSender(rtmp_url)
     rtmp.start()
+
+if vid_mapping:
+    video_maker = VideoMaker(capture)
+    video_maker.start()
 
 #Wait until vehicle is armable
 counter = 0
@@ -225,6 +230,9 @@ while True:
 
 if show_stream:
     rtmp.stop()
+
+if vid_mapping:
+    video_maker.stop()
 
 cap.release()
 cv2.destroyAllWindows()
