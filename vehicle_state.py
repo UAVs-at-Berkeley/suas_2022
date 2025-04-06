@@ -117,12 +117,12 @@ while not vehicle.is_armable:
     # If required, you can provide additional information about initialisation
     # using `vehicle.gps_0.fix_type` and `vehicle.mode.name`.
     
-#print "\nSet Vehicle.armed=True (currently: %s)" % vehicle.armed 
-#vehicle.armed = True
-#while not vehicle.armed:
+# print "\nSet Vehicle.armed=True (currently: %s)" % vehicle.armed 
+# vehicle.armed = True
+# while not vehicle.armed:
 #    print " Waiting for arming..."
 #    time.sleep(1)
-#print " Vehicle is armed: %s" % vehicle.armed 
+# print " Vehicle is armed: %s" % vehicle.armed 
 
 
 # Add and remove and attribute callbacks
