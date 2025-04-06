@@ -26,10 +26,10 @@ class VideoMaker:
         fps = self.capture.get(cv2.CAP_PROP_FPS)
 
         i = 0
-        while os.path.exists(f'{PATH_OF_SCRIPT}/{i}.mp4'):
+        while os.path.exists(f'{PATH_OF_SCRIPT}/video_{i}.avi'):
             i += 1
 
-        self.data = cv2.VideoWriter(f'{PATH_OF_SCRIPT}/video_{i}.mp4', FOURCC, fps, (frame_width, frame_height))
+        self.data = cv2.VideoWriter(f'{PATH_OF_SCRIPT}/video_{i}.avi', FOURCC, fps, (frame_width, frame_height))
 
     def recording_process(self):
         while self.recording_flag:
