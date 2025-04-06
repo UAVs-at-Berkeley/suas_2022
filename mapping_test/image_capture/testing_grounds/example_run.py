@@ -1,6 +1,8 @@
 from image_capture_modified import capture_image_and_save
 from image_stitcher import stich_all
 from random import choice
+from threading import Thread
+from time import sleep
 import cv2
 import os
 import numpy as np
@@ -10,11 +12,11 @@ RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
 
 def test():
     video_capture = cv2.VideoCapture(RSTP_URL)
-    ensure_capture_not_gray(video_capture)
+    wait = Thread(target= sleep, args= (5, )) # maybe this works lol
+    wait.start()
+    wait.join()
     capture_image_and_save(video_capture, (0, 0))
-    ensure_capture_not_gray(video_capture)
     capture_image_and_save(video_capture, (0, 1))
-    ensure_capture_not_gray(video_capture)
     capture_image_and_save(video_capture, (0, 2))
     capture_image_and_save(video_capture, (1, 0))
     capture_image_and_save(video_capture, (1, 1))
