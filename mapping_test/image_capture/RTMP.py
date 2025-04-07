@@ -184,7 +184,7 @@ class RTMPSender:
         
 
 
-def test(rstp_url="rtsp://192.168.144.25:8554/main.264"):
+def test(rtsp_url="rtsp://192.168.144.25:8554/main.264"):
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print("No connection")

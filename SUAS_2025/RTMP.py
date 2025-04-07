@@ -184,7 +184,7 @@ class RTMPSender:
         
 
 
-def test(rstp_url="rtsp://192.168.144.25:8554/main.264"):
+def test(rtsp_url="rtsp://192.168.144.25:8554/main.264"):
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print("No connection")
@@ -208,8 +208,9 @@ def test(rstp_url="rtsp://192.168.144.25:8554/main.264"):
 if __name__=="__main__":
     
     parser = argparse.ArgumentParser(description='Describes RTSP server to connect to.')
-    parser.add_argument('--rtsp', 
+    parser.add_argument('-rts', '--rtsp', nargs='?', const="rtsp://192.168.144.25:8554/main.264", type=str, default="rtsp://192.168.144.25:8554/main.264",
                    help="RTSP connection string. By default rtsp://192.168.144.25:8554/main.264 is used")
+    
     args = parser.parse_args()
 
     rtsp_url = args.rtsp
