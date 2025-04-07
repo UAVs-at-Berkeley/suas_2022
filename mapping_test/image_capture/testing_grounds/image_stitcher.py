@@ -9,6 +9,82 @@ OVERLAP_X = int(0.2*KING_SIZE[0])
 OVERLAP_Y = int(0.3*KING_SIZE[1])
 DEBUG = True
 
+'''
+def getDeltaX(m, kp1, kp2, leftwidth):
+        lx = kp1[m.queryIdx].pt[0]
+        rx = kp2[m.trainIdx].pt[0]
+        deltax = rx+abs(leftwidth-lx)
+        return deltax
+def getLeftRightX(m, kp1, kp2, leftwidth):
+    lx = abs(leftwidth-kp1[m.queryIdx].pt[0])
+    rx = kp2[m.trainIdx].pt[0]
+    return (lx, rx)
+#gets the difference in y pixels between two points
+def getDeltaY(m, kp1, kp2):
+    ly = kp1[m.queryIdx].pt[1]
+    ry = kp2[m.trainIdx].pt[1]
+    deltay = ry-ly
+    return deltay
+
+def getSiftAlignment(img1, img2, overlapx, startyfrac, endyfrac):
+    #get height and width
+    h, w1 = img1.shape[:2]
+    #h, w = img1.shape[:2]
+    # Read the images to be stitched
+
+    # Initialize SIFT detector
+    sift = cv2.SIFT_create()
+
+    # Detect keypoints and descriptors
+    partialx1 = overlapx
+    partialx2 = overlapx
+    partialy1 = int(h*startyfrac)
+    partialy2 = int(h*endyfrac)
+    pimg1 = img1[partialy1:partialy2, w1-partialx1:]
+    pimg2 = img2[partialy1:partialy2, 0:partialx2]
+    
+    kp1, des1 = sift.detectAndCompute(pimg1, None)
+    kp2, des2 = sift.detectAndCompute(pimg2, None)
+
+    # Use BFMatcher to find matches
+    bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+    matches = bf.match(des1, des2)
+
+    # Sort matches by distance
+    matches = filter(lambda m: abs(getDeltaY(m, kp1, kp2)) < OVERLAP_Y, matches)
+    matches = sorted(matches, key=lambda m: getDeltaX(m, kp1, kp2, partialx1)**2+getDeltaY(m, kp1, kp2)**2)
+    matches = matches[:10]
+    #matches = list(filter(lambda m: getDeltaX(m) < 250, matches))
+
+    
+    img_matches = cv2.drawMatches(
+        pimg1, kp1, pimg2, kp2, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+
+    cv2.imwrite('test.png', img_matches)
+
+    if len(matches) == 0:
+        print("no matches found, just concatenating")
+        return (overlapx//2, overlapx//2, 0)
+
+    pt_LRx = [getLeftRightX(m, kp1, kp2, partialx1) for m in matches]
+    pt_Lx = [x[0] for x in pt_LRx]
+    pt_Rx = [x[1] for x in pt_LRx]
+    pt_deltay = [getDeltaY(m, kp1, kp2) for m in matches]
+    #hcrop = int(sum(pt_deltax)/len(pt_deltax))
+    #lx = int(sum(pt_Lx)/len(pt_Lx))
+    #rx = int(sum(pt_Rx)/len(pt_Rx))
+    lx = int(median(pt_Lx))
+    rx = int(median(pt_Rx))
+    #vshift = int(sum(pt_deltay)/len(pt_deltay))
+    vshift = int(median(pt_deltay))
+    if abs(vshift) > OVERLAP_Y:
+        print("hmm, massive vshift. throwing it out")
+        #print([(kp1[m.queryIdx].pt[1], kp2[m.trainIdx].pt[1]) for m in matches])
+        #print([getDeltaY(m, kp1, kp2) for m in matches])
+        return (overlapx//2, overlapx//2, 0)
+    return (lx, rx, vshift)
+'''
+
 def enforceResize(img) -> np.ndarray:
     img = cv2.resize(img, KING_SIZE, interpolation = cv2.INTER_LINEAR)
     return img
