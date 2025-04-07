@@ -235,6 +235,11 @@ if vid_mapping:
     video = VideoMaker(cap)
     video.start()
 
+if show_stream:
+    ret, frame = cap.read()
+    rtmp.setFrame(frame)
+    imcap.image_save(frame)
+
 #Wait until vehicle is armable
 counter = 0
 while not vehicle.is_armable:
@@ -253,21 +258,39 @@ print("Entered AUTO mode")
 
 vehicle.gimbal.rotate(-90, 0, 0)
 utils.setYaw(vehicle, 90)
-while True:
-    nextwaypoint=vehicle.commands.next
+try:
+    while True:
+        nextwaypoint=vehicle.commands.next
+        frame = None
+        if show_stream:
+            ret, frame = cap.read()
+            rtmp.setFrame(frame)
 
-    if not nextwaypoint:
-        break
+        if not nextwaypoint:
+            break
 
-    if distance_to_current_waypoint() < 1 and vehicle.groundspeed < 0.5:
-        waypoint = getCurrentWaypoint()
-        time.sleep(1)
-        imcap.capture_image_and_save(cap, coordinates = (waypoint.lat, waypoint.lon))
-        time.sleep(1)
+        if distance_to_current_waypoint() < 1 and vehicle.groundspeed < 0.5:
+            waypoint = getCurrentWaypoint()
+            time.sleep(1)
+            #if streaming to rtmp, just save frame from earlier, otherwise capture and save
+            if show_stream:
+                imcap.image_save(frame, coordinates = (waypoint.lat, waypoint.lon))
+            else:
+                frame = imcap.capture_image_and_save(cap, coordinates = (waypoint.lat, waypoint.lon))
+            time.sleep(1)
 
-    print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
+        print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
 
-    time.sleep(3)
+        time.sleep(3)
+except KeyboardInterrupt:
+    if show_stream:
+        rtmp.stop()
+    if vid_mapping:
+        video.stop()
+    cap.release()
+    cv2.destroyAllWindows()
+    # quit
+    exit(0)
 
 utils.RTL(vehicle)
 

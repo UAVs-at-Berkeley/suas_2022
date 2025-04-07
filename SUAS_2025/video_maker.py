@@ -60,7 +60,7 @@ def basic_sanity_test():
     capture = cv2.VideoCapture(RSTP_URL)
     video_maker = VideoMaker(capture)
     video_maker.start()
-    sleep(3)
+    sleep(180)
     video_maker.stop()
     capture.release()
 
