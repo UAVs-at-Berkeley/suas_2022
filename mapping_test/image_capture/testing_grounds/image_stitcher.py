@@ -23,10 +23,14 @@ class ImageNode:
         self.rightNeighbor = None
         self.rightNeighborMatches = None
         self.rightComparsionImage = None
+        self.rightNeighborKP1 = None
+        self.rightNeighborKP2 = None
 
         self.downNeighbor = None
         self.downNeighborMatches = None
         self.downComparsionImage = None
+        self.downNeighborKP1 = None
+        self.downNeighborKP2 = None
 
     def initRightNeighbor(self, rightNeighbor, siftMethod):
         self.rightNeighbor = rightNeighbor
@@ -58,10 +62,12 @@ class ImageNode:
         matches = bf.match(des1, des2)
 
         #Sort them in the order of their distance
-        matches = sorted(matches, key = lambda x: x.distance)
+        matches = sorted(matches, key = lambda x: x.distance)[:30]
 
         #Draw the top 30 matches
-        img_matches = cv2.drawMatches(compImg, kp1, compRightNeighborImg, kp2, matches[:30], None, flags=None)
+        img_matches = cv2.drawMatches(compImg, kp1, compRightNeighborImg, kp2, matches, None, flags=None)
+        self.rightNeighborKP1 = kp1
+        self.rightNeighborKP2 = kp2
         self.rightNeighborMatches = matches
         self.rightComparsionImage = img_matches
 
@@ -88,10 +94,12 @@ class ImageNode:
         matches = bf.match(des1, des2)
 
         #Sort them in the order of their distance
-        matches = sorted(matches, key = lambda x: x.distance)
+        matches = sorted(matches, key = lambda x: x.distance)[:30]
 
         #Draw the top 30 matches
-        img_matches = cv2.drawMatches(compImg, kp1, compDownNeighborImg, kp2, matches[:30], None, flags=None)
+        img_matches = cv2.drawMatches(compImg, kp1, compDownNeighborImg, kp2, matches, None, flags=None)
+        self.downNeighborKP1 = kp1
+        self.downNeighborKP2 = kp2
         self.downNeighborMatches = matches
         self.downComparsionImage = img_matches
 
@@ -140,11 +148,40 @@ def stitchMatrix(imgMatrix, subfolder) -> np.ndarray:
     overlapWidth = OVERLAP_X
 
     #Put the first image in the final image, starting at (OverlapX, OverlapY)
-    finalImg[overlapHeight:imgHeight+overlapHeight, overlapWidth:imgWidth+overlapWidth] = imgNodes[0][0].img
-
-    # For every image in the matrix, use SIFT to find how it is positioned relative to its neighbors
+    srcTri = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
+    dstTri = np.array([[0, 0], [2, 0], [0.5, 1.5]]).astype(np.float32)
+    affineMatrix = cv2.getAffineTransform(srcTri, dstTri)
+    print(affineMatrix)
+    imgNodes[0][0].img = cv2.warpAffine(imgNodes[0][0].img, affineMatrix, (3*imgWidth, 2*imgHeight))
+    h, w = imgNodes[0][0].img.shape[:2]
+    finalImg[overlapHeight:overlapHeight+h, overlapWidth:overlapWidth+w] = imgNodes[0][0].img
 
     # For each image, calculate the best way to rotate and translate it so that it fits with its neighbors
+    for i in range(rows):
+        for j in range(cols):
+            if j < cols - 1:
+                # Get the best matching keypoints between current image and right neighbor
+                m = imgNodes[i][j].rightNeighborMatches
+                for match in m:
+                    i1 = match.queryIdx  # Index of keypoint in current image
+                    i2 = match.trainIdx  # Index of matching keypoint in right neighbor
+                    p1 = imgNodes[i][j].rightNeighborKP1[i1].pt  # Point coordinates in current image
+                    p2 = imgNodes[i][j].rightNeighborKP2[i2].pt  # Point coordinates in right neighbor
+                    #print(p1, p2)
+            if i < rows - 1:
+                # Get the best matching keypoints between current image and down neighbor
+                m = imgNodes[i][j].downNeighborMatches
+                for match in m:
+                    i1 = match.queryIdx  # Index of keypoint in current image
+                    i2 = match.trainIdx  # Index of matching keypoint in down neighbor
+                    p1 = imgNodes[i][j].downNeighborKP1[i1].pt  # Point coordinates in current image
+                    p2 = imgNodes[i][j].downNeighborKP2[i2].pt  # Point coordinates in down neighbor
+                    #print(p1, p2)
+
+            #Calculate the transform
+
+            
+    
 
     # Return the stitched image
     return finalImg
