@@ -1,4 +1,4 @@
-from dronekit import connect, VehicleMode, LocationGlobalRelative, mavutil
+from dronekit import connect, VehicleMode, LocationGlobalRelative, mavutil, Command
 import math
 
 def getHomeLocation(vehicle):
@@ -89,7 +89,7 @@ def upload_mission(vehicle, aFileName):
     Upload a mission from a file. 
     """
     #Read mission from file
-    missionlist = readmission(aFileName)
+    missionlist = readMission(vehicle, aFileName)
     
     print("\nUpload mission from a file: %s" % aFileName)
     #Clear existing mission from vehicle
@@ -252,7 +252,8 @@ def distance_to_current_waypoint(vehicle):
     nextwaypoint = vehicle.commands.next
     if nextwaypoint==0:
         return None
-    missionitem=vehicle.commands[nextwaypoint-1] #commands are zero indexed
+
+    missionitem=vehicle.commands[nextwaypoint] #commands are zero indexed
     lat = missionitem.x
     lon = missionitem.y
     alt = missionitem.z
@@ -305,7 +306,7 @@ def setServo(vehicle, num, state):
     msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, num, state, 0, 0, 0, 0, 0)
     vehicle.send_mavlink(msg)
 
-def setYaw(heading, relative=False):
+def setYaw(vehicle, heading, relative=False):
     #Send MAV_CMD_CONDITION_YAW message to point vehicle at a specified heading (in degrees).
     if relative:
         is_relative = 1 #yaw relative to direction of travel
