@@ -210,13 +210,16 @@ while not vehicle.is_armable:
     time.sleep(1)
 
 while vehicle.mode != VehicleMode("AUTO"):
-    time.sleep(1)
+    print("Currently in manual mode... Waiting for pilot to switch to AUTO")
+    time.sleep(3)
+    
+print("Entered AUTO mode")
 
 vehicle.gimbal.rotate(-90, 0, 0)
 while True:
     nextwaypoint=vehicle.commands.next
 
-    if utils.distance_to_current_waypoint(vehicle) < 1:
+    if utils.distance_to_current_waypoint(vehicle) < 1 and vehicle.groundspeed < 0.5:
         waypoint = utils.getCurrentWaypoint(vehicle)
         time.sleep(1)
         imcap.capture_image_and_save(cap, coordinates = (waypoint.lat, waypoint.lon))
@@ -226,6 +229,12 @@ while True:
 
     if nextwaypoint == lastwaypoint:
         break
+    time.sleep(3)
+
+utils.RTL(vehicle)
+
+while vehicle.armed = "ARMED":
+    print("Returning to land. Will terminate once landed.")
     time.sleep(3)
 
 if show_stream:

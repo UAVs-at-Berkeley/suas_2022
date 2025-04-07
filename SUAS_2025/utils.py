@@ -39,6 +39,10 @@ def setAirspeed(vehicle, speed):
     vehicle.airspeed = speed
     print("Vehicle airspeed is now: %f m/s" % speed)
 
+def setGroundspeed(vehicle, speed):
+    vehicle.groundspeed = speed
+    print("Vehicle ground speed is now: %f m/s" % speed)
+
 def RTL(vehicle):
     print("Returning to Launch")
     vehicle.mode = VehicleMode("RTL")
@@ -152,6 +156,30 @@ def write_missionlist(aFileName, cmds):
     with open(aFileName, 'w') as file_:
         print(" Write mission to file")
         file_.write(output)
+
+# Given a list of GPS coordinates and an altitude and hold time, generates a mission command list of, optionally write to file
+def createMissionNavPts(coords, alt, hold_time=0, aFileName=None):
+    cmds = []
+    for coord in coords:
+        cmds.append(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 1, hold_time, 0, 0, 0, coord.lat, coord.lon, alt))
+    
+    if aFileName is None:
+        return cmds
+    else:
+        write_missionlist(aFileName, cmds)
+        return cmds
+
+# Given a list of GPS coordinates with altitude and hold time, generates a mission command list of, optionally write to file
+def varAlt_createMissionNavPts(coords, hold_time=0, aFileName=None):
+    cmds = []
+    for coord in coords:
+        cmds.append(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 1, hold_time, 0, 0, 0, coord.lat, coord.lon, coord.alt))
+    
+    if aFileName is None:
+        return cmds
+    else:
+        write_missionlist(aFileName, cmds)
+        return cmds
         
         
 def printfile(aFileName):
