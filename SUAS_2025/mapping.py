@@ -216,11 +216,7 @@ vehicle = connect(ip=connection_string, wait_ready=True, timeout=30, heartbeat_t
 if verbose:
     vs.print_vehicle_state(vehicle)
 
-cmds = vehicle.commands
-cmds.download()
-cmds.wait_ready()
-if not vehicle.home_location:
-    print("Waiting for home location ...")
+cmds = downloadCommands(vehicle)
 
 cap = cv2.VideoCapture(rtsp_url)
 if not cap.isOpened():
