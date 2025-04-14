@@ -15,8 +15,8 @@ def capture_image_and_save(existing_video_capture, coordinates = ("test", "test"
     cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(coordinates[0])}_{str(coordinates[1])}.png', frame)
     return frame
 
-def image_save(frame, coordinates = None):
+def image_save(frame, coordinates = ("test", "test")):
     """
-    Saves fra,e to the directory of this file with the provided coordinates
+    Saves frame to the directory of this file with the provided coordinates
     """
     cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(coordinates[0])}_{str(coordinates[1])}.png', frame)
