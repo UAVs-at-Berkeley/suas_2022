@@ -244,10 +244,23 @@ if show_stream:
 counter = 0
 while not vehicle.is_armable:
     # If cannot acheive armable in 120 seconds, reboot the autopilot
-    if counter == 120:
+    if counter == 1200:
         vehicle.reboot()
     print("Waiting for vehicle to initialise...")
     counter += 1
+    if show_stream:
+            ret, frame = cap.read()
+            rtmp.setFrame(frame)
+
+    if KeyboardInterrupt:
+        if show_stream:
+            rtmp.stop()
+        if vid_mapping:
+            video.stop()
+        cap.release()
+        cv2.destroyAllWindows()
+        # quit
+        exit(0)
     time.sleep(1)
 
 while vehicle.mode != VehicleMode("AUTO"):
