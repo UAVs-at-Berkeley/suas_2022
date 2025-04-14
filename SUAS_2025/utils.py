@@ -1,6 +1,9 @@
 from dronekit import connect, VehicleMode, LocationGlobalRelative, mavutil, Command
 import math
 
+# For setting custom mavlink command can either encode with vehicle.message_factory.command_long_encode() and send with vehicle.send_mavlink()
+# or can encode and send at once with vehicle.command_long_send()
+
 def getHomeLocation(vehicle):
     # Get Vehicle Home location - will be `None` until first set by autopilot
     while not vehicle.home_location:
@@ -18,6 +21,60 @@ def downloadCommands(vehicle):
     cmds.download()
     cmds.wait_ready()
     return cmds
+
+def goto_position_target_global_int(vehicle, aLocation):
+    """
+    Send SET_POSITION_TARGET_GLOBAL_INT command to request the vehicle fly to a specified LocationGlobal.
+
+    For more information see: https://pixhawk.ethz.ch/mavlink/#SET_POSITION_TARGET_GLOBAL_INT
+
+    See the above link for information on the type_mask (0=enable, 1=ignore). 
+    At time of writing, acceleration and yaw bits are ignored.
+    """
+    msg = vehicle.message_factory.set_position_target_global_int_encode(
+        0,       # time_boot_ms (not used)
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT, # frame
+        0b0000111111111000, # type_mask (only speeds enabled)
+        aLocation.lat*1e7, # lat_int - X Position in WGS84 frame in 1e7 * meters
+        aLocation.lon*1e7, # lon_int - Y Position in WGS84 frame in 1e7 * meters
+        aLocation.alt, # alt - Altitude in meters in AMSL altitude, not WGS84 if absolute or relative, above terrain if GLOBAL_TERRAIN_ALT_INT
+        0, # X velocity in NED frame in m/s
+        0, # Y velocity in NED frame in m/s
+        0, # Z velocity in NED frame in m/s
+        0, 0, 0, # afx, afy, afz acceleration (not supported yet, ignored in GCS_Mavlink)
+        0, 0)    # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink) 
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+def goto(vehicle, dNorth, dEast, gotoFunction=None):
+    """
+    Moves the vehicle to a position dNorth metres North and dEast metres East of the current position.
+
+    The method takes a function pointer argument with a single `dronekit.lib.LocationGlobal` parameter for 
+    the target position. This allows it to be called with different position-setting commands. 
+    By default it uses the standard method: dronekit.lib.Vehicle.simple_goto().
+
+    The method reports the distance to target every two seconds.
+    """
+    if not gotoFunction:
+        gotoFunction = vehicle.simple_goto
+    currentLocation = vehicle.location.global_relative_frame
+    targetLocation = get_location_metres(currentLocation, dNorth, dEast)
+    targetDistance = get_distance_metres(currentLocation, targetLocation)
+    gotoFunction(targetLocation)
+    
+    #print "DEBUG: targetLocation: %s" % targetLocation
+    #print "DEBUG: targetLocation: %s" % targetDistance
+
+    while vehicle.mode.name=="GUIDED": #Stop action if we are no longer in guided mode.
+        #print "DEBUG: mode: %s" % vehicle.mode.name
+        remainingDistance=get_distance_metres(vehicle.location.global_relative_frame, targetLocation)
+        print("Distance to target: ", remainingDistance)
+        if remainingDistance<=targetDistance*0.01: #Just below target, in case of undershoot.
+            print("Reached target")
+            break
+        time.sleep(2)
 
 def setVehicleMode(vehicle, mode='STABILIZE'):
     print("\nSet Vehicle.mode = %s (currently: %s)",mode, vehicle.mode.name) 
@@ -39,9 +96,33 @@ def setAirspeed(vehicle, speed):
     vehicle.airspeed = speed
     print("Vehicle airspeed is now: %f m/s" % speed)
 
+def setGroundspeed(vehicle, speed):
+    vehicle.groundspeed = speed
+    print("Vehicle ground speed is now: %f m/s" % speed)
+
+def takeoff(vehicle, altitude):
+    print("Taking off")
+    if alt is not None:
+        altitude = float(alt)
+        if math.isnan(altitude) or math.isinf(altitude):
+            raise ValueError("Altitude was NaN or Infinity. Please provide a real number")
+        vehicle.command_long_send(0, 0, mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+                                               0, 0, 0, 0, 0, 0, 0, altitude)
+
+
 def RTL(vehicle):
     print("Returning to Launch")
-    vehicle.mode = VehicleMode("RTL")
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH, #command
+        0, #confirmation
+        0, 0, 0, 0, #params 1-4
+        0, #param 5
+        0, #param 6
+        0 #param 7
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
     while not vehicle.mode.name=="RTL":  #Wait until mode has changed
         print("Waiting for mode change ...")
         time.sleep(1)
@@ -152,6 +233,30 @@ def write_missionlist(aFileName, cmds):
     with open(aFileName, 'w') as file_:
         print(" Write mission to file")
         file_.write(output)
+
+# Given a list of GPS coordinates and an altitude and hold time, generates a mission command list of, optionally write to file
+def createMissionNavPts(coords, alt, hold_time=0, aFileName=None):
+    cmds = []
+    for coord in coords:
+        cmds.append(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 1, hold_time, 0, 0, 0, coord.lat, coord.lon, alt))
+    
+    if aFileName is None:
+        return cmds
+    else:
+        write_missionlist(aFileName, cmds)
+        return cmds
+
+# Given a list of GPS coordinates with altitude and hold time, generates a mission command list of, optionally write to file
+def varAlt_createMissionNavPts(coords, hold_time=0, aFileName=None):
+    cmds = []
+    for coord in coords:
+        cmds.append(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 1, hold_time, 0, 0, 0, coord.lat, coord.lon, coord.alt))
+    
+    if aFileName is None:
+        return cmds
+    else:
+        write_missionlist(aFileName, cmds)
+        return cmds
         
         
 def printfile(aFileName):
@@ -297,6 +402,59 @@ def setYaw(vehicle, heading, relative=False):
     # send command to vehicle
     vehicle.send_mavlink(msg)
 
+def simple_goto(vehicle, location, airspeed=None, groundspeed=None):
+        '''
+        Go to a specified global location (:py:class:`LocationGlobal` or :py:class:`LocationGlobalRelative`).
+
+        There is no mechanism for notification when the target location is reached, and if another command arrives
+        before that point that will be executed immediately.
+
+        You can optionally set the desired airspeed or groundspeed (this is identical to setting
+        :py:attr:`airspeed` or :py:attr:`groundspeed`). The vehicle will determine what speed to
+        use if the values are not set or if they are both set.
+
+        The method will change the :py:class:`VehicleMode` to ``GUIDED`` if necessary.
+
+        .. code:: python
+
+            # Set mode to guided - this is optional as the simple_goto method will change the mode if needed.
+            vehicle.mode = VehicleMode("GUIDED")
+
+            # Set the LocationGlobal to head towards
+            a_location = LocationGlobal(-34.364114, 149.166022, 30)
+            vehicle.simple_goto(a_location)
+
+        :param location: The target location (:py:class:`LocationGlobal` or :py:class:`LocationGlobalRelative`).
+        :param airspeed: Target airspeed in m/s (optional).
+        :param groundspeed: Target groundspeed in m/s (optional).
+        '''
+        if isinstance(location, LocationGlobalRelative):
+            frame = mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT
+            alt = location.alt
+        elif isinstance(location, LocationGlobal):
+            # This should be the proper code:
+            # frame = mavutil.mavlink.MAV_FRAME_GLOBAL
+            # However, APM discards information about the relative frame
+            # and treats any alt value as relative. So we compensate here.
+            frame = mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT
+            if not self.home_location:
+                self.commands.download()
+                self.commands.wait_ready()
+            alt = location.alt - self.home_location.alt
+        else:
+            raise ValueError('Expecting location to be LocationGlobal or LocationGlobalRelative.')
+
+        self._master.mav.mission_item_send(0, 0, 0, frame,
+                                           mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 2, 0, 0,
+                                           0, 0, 0, location.lat, location.lon,
+                                           alt)
+
+        if airspeed is not None:
+            self.airspeed = airspeed
+        if groundspeed is not None:
+            self.groundspeed = groundspeed
+
+
 # Here is the documentation on sending a LONG command: https://mavlink.io/en/messages/common.html#COMMAND_LONG
 def sendCustomCommandLONG(vehicle, command, param1, param2, param3, param4, param5, param6, param7):
     msg = vehicle.message_factory.command_long_encode(0, 0, command, 0, param1, param2, param3, param4, param5, param6, param7)
@@ -330,3 +488,152 @@ def image_pixel_sizes(cam_x, cam_y, image_size = (1920, 1080)):
     cam_y_size = cam_y / image_size[1]
     print(cam_y_size)
     return cam_x_size, cam_y_size
+
+def set_roi(vehicle, location):
+    """
+    Send MAV_CMD_DO_SET_ROI message to point camera gimbal at a 
+    specified region of interest (LocationGlobal).
+    The vehicle may also turn to face the ROI.
+
+    For more information see: 
+    http://copter.ardupilot.com/common-mavlink-mission-command-messages-mav_cmd/#mav_cmd_do_set_roi
+    """
+    # create the MAV_CMD_DO_SET_ROI command
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_DO_SET_ROI, #command
+        0, #confirmation
+        0, 0, 0, 0, #params 1-4
+        location.lat,
+        location.lon,
+        location.alt
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+# Set zoom to high or low using AUX function, Camera Zoom is code 167 as described here by RCx_OPTIONS https://ardupilot.org/sub/docs/common-auxiliary-functions.html#common-auxiliary-functions
+def setZoom(vehicle, level=0):
+    
+    # create the MAV_CMD_DO_SET_ROI command
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_DO_AUX_FUNCTION, #command
+        0, #confirmation
+        167, level, 0, 0, #params 1-4
+        0,
+        0,
+        0
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+# Set autofocus to high or low using AUX function, Camera Autofocus is code 169 as described here by RCx_OPTIONS https://ardupilot.org/sub/docs/common-auxiliary-functions.html#common-auxiliary-functions
+def setAutoFocus(vehicle, level):
+    # create the MAV_CMD_DO_SET_ROI command
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_DO_AUX_FUNCTION, #command
+        0, #confirmation
+        169, level, 0, 0, #params 1-4
+        0,
+        0,
+        0
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+# Set aux function to high or low, pass in RCx_OPTIONs code to auxfn (Codes: as described here by RCx_OPTIONS https://ardupilot.org/sub/docs/common-auxiliary-functions.html#common-auxiliary-functions)
+def setAuxFunction(vehicle, auxfn, level):
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_DO_AUX_FUNCTION, #command
+        0, #confirmation
+        auxfn, level, 0, 0, #params 1-4
+        0,
+        0,
+        0
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+def resetGimbal(vehicle):
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_GIMBAL_RESET, #command
+        0, #confirmation
+        0, 0, 0, 0, #params 1-4
+        0, #param 5
+        0, #param 6
+        0 #param 7
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+def setAlt(vehicle, altitude, rate = 0.5):
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_CONDITION_CHANGE_ALT, #command
+        0, #confirmation
+        rate, 0, 0, 0, #params 1-4
+        0, #param 5
+        0, #param 6
+        altitude #param 7
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+# https://mavlink.io/en/messages/common.html#MAV_CMD_NAV_CONTINUE_AND_CHANGE_ALT
+def setNavAlt(vehicle, altitude, climb_dir=0):
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_NAV_CONTINUE_AND_CHANGE_ALT, #command
+        0, #confirmation
+        climb_dir, 0, 0, 0, #params 1-4
+        0, #param 5
+        0, #param 6
+        altitude #param 7
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+# https://mavlink.io/en/messages/common.html#MAV_CMD_DO_CHANGE_ALTITUDE
+def setAltFrame(vehicle, altitude, frame = 3):
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_DO_CHANGE_ALTITUDE, #command
+        0, #confirmation
+        altitude, frame, 0, 0, #params 1-4
+        0, #param 5
+        0, #param 6
+        0 #param 7
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+def doJump(vehicle, command_num, repeat = 0):
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_DO_JUMP, #command
+        0, #confirmation
+        command_num, repeat, 0, 0, #params 1-4
+        0, #param 5
+        0, #param 6
+        0 #param 7
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
+
+def setSpeed(vehicle, speed_type, speed = -1, throttle=-1):
+    # for speed_type: 0=AIRSPEED, 1=GROUNDSPEED, 2=CLIMBSPEED, 3=DESCENTSPEED
+    # for speed in m/s and throttle as %, value of -2 returns value to vehicle default, -1 means no change
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_CMD_DO_JUMP, #command
+        0, #confirmation
+        speed_type, speed, throttle, 0, #params 1-4
+        0, #param 5
+        0, #param 6
+        0 #param 7
+        )
+    # send command to vehicle
+    vehicle.send_mavlink(msg)
