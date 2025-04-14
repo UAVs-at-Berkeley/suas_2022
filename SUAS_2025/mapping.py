@@ -216,7 +216,7 @@ vehicle = connect(ip=connection_string, wait_ready=True, timeout=30, heartbeat_t
 if verbose:
     vs.print_vehicle_state(vehicle)
 
-cmds = downloadCommands(vehicle)
+cmds = utils.downloadCommands(vehicle)
 
 cap = cv2.VideoCapture(rtsp_url)
 if not cap.isOpened():
@@ -260,27 +260,10 @@ while not vehicle.is_armable:
     time.sleep(1)
 
 while vehicle.mode != VehicleMode("AUTO"):
-<<<<<<< HEAD
     print("Currently in manual mode... Waiting for pilot to switch to AUTO")
     time.sleep(3)
     
 print("Entered AUTO mode")
-
-vehicle.gimbal.rotate(-90, 0, 0)
-while True:
-    nextwaypoint=vehicle.commands.next
-
-    if utils.distance_to_current_waypoint(vehicle) < 1 and vehicle.groundspeed < 0.5:
-        waypoint = utils.getCurrentWaypoint(vehicle)
-        time.sleep(1)
-        imcap.capture_image_and_save(cap, coordinates = (waypoint.lat, waypoint.lon))
-        time.sleep(1)
-=======
-    #print("Currently in manual mode... Waiting for pilot to switch to AUTO mode")
-    time.sleep(1)
-
-print("Entered AUTO mode")
->>>>>>> 858da139d39628cfd96bcad56b5596ef26053b77
 
 vehicle.gimbal.rotate(-90, 0, 0)
 utils.setYaw(vehicle, 90)
