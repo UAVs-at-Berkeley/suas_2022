@@ -43,6 +43,7 @@ sitl = None
 cap = None
 rtmp = None
 video_maker = None
+mission_term = True
 
 async def drone_control():
     # if no connection string start sitl
@@ -89,7 +90,30 @@ async def drone_control():
         asyncio.sleep(3)
     
     print("Entered AUTO mode")
+    vehicle.gimbal.rotate(-90, 0, 0)
+    try:
+    while True:
+        nextwaypoint=vehicle.commands.next
+        if not nextwaypoint:
+            break
+        print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
 
+        asyncio.sleep(3)
+    
+    utils.RTL(vehicle)
+
+    vehicle.gimbal.rotate(0, 0, 0)
+
+    while vehicle.armed:
+        print("Returning to land. Will terminate once landed.")
+        asyncio.sleep(3)
+    
+    mission_term = False
+    print("Close vehicle object")
+    vehicle.close()
+
+    if sitl is not None:
+        sitl.stop()
 
 async def camera():
     cap = cv2.VideoCapture(rtsp_url)
@@ -109,6 +133,34 @@ async def camera():
         ret, frame = cap.read()
         rtmp.setFrame(frame)
         imcap.image_save(frame)
+    try:
+        while True:
+            if not mission_term:
+                break
+            frame = None
+            if show_stream:
+                ret, frame = cap.read()
+                rtmp.setFrame(frame)
+            await asyncio.sleep(0)
+    except KeyboardInterrupt:
+        if show_stream:
+            rtmp.stop()
+        if vid_mapping:
+            video.stop()
+        cap.release()
+        cv2.destroyAllWindows()
+        # quit
+        exit(0)
+
+    if show_stream:
+        rtmp.stop()
+
+    if vid_mapping:
+        video.stop()
+
+    cap.release()
+    cv2.destroyAllWindows()
+    
 
 async def yolo():
     for letter in 'abcdefghij':
@@ -125,68 +177,3 @@ async def main():
 
 # Run the main coroutine
 asyncio.run(main())
-
-vehicle.gimbal.rotate(-90, 0, 0)
-utils.setYaw(vehicle, 90)
-try:
-    while True:
-        nextwaypoint=vehicle.commands.next
-        frame = None
-        if show_stream:
-            ret, frame = cap.read()
-            rtmp.setFrame(frame)
-
-        if not nextwaypoint:
-            break
-
-        if distance_to_current_waypoint() < 1 and vehicle.groundspeed < 0.5:
-            waypoint = getCurrentWaypoint()
-            time.sleep(1)
-            #if streaming to rtmp, just save frame from earlier, otherwise capture and save
-            if show_stream:
-                imcap.image_save(frame, coordinates = (waypoint.lat, waypoint.lon))
-            else:
-                frame = imcap.capture_image_and_save(cap, coordinates = (waypoint.lat, waypoint.lon))
-            time.sleep(1)
-
-        print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
-
-        time.sleep(3)
-except KeyboardInterrupt:
-    if show_stream:
-        rtmp.stop()
-    if vid_mapping:
-        video.stop()
-    cap.release()
-    cv2.destroyAllWindows()
-    # quit
-    exit(0)
-
-utils.RTL(vehicle)
-
-vehicle.gimbal.rotate(0, 0, 0)
-
-while vehicle.armed:
-    print("Returning to land. Will terminate once landed.")
-    time.sleep(3)
-
-utils.RTL(vehicle)
-
-while vehicle.armed = "ARMED":
-    print("Returning to land. Will terminate once landed.")
-    time.sleep(3)
-
-if show_stream:
-    rtmp.stop()
-
-if vid_mapping:
-    video.stop()
-
-cap.release()
-cv2.destroyAllWindows()
-
-print("Close vehicle object")
-vehicle.close()
-
-if sitl is not None:
-    sitl.stop()
