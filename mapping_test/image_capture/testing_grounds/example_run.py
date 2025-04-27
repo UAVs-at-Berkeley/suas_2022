@@ -29,7 +29,7 @@ def test():
 def test_dummy_photos_1():
     for row in range(3):
         for col in range(3):
-            frame = cv2.imread(f'{PATH_OF_SCRIPT}/3x3_runway/({row}, {col}).png')
+            frame = cv2.imread(f'{PATH_OF_SCRIPT}/new test images/3 (sfo)/({row}, {col}).png')
             cv2.imwrite(f'{PATH_OF_SCRIPT}/({row}, {col}).png', frame)
 
 def test_dummy_photos_2():
@@ -52,11 +52,11 @@ def ensure_capture_not_gray(video_capture):
             break
 
 if __name__ == '__main__':
-    # test_dummy_photos_1()
-    # stitch_all(3, 3)
+    test_dummy_photos_1()
+    stitch_all(3,3)
 
-    test_dummy_photos_2()
-    stitch_all(4, 3)
+    #test_dummy_photos_2()
+    #stitch_all(4, 3)
 
     #test()
 
