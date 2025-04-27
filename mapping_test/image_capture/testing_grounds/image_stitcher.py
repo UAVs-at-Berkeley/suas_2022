@@ -8,6 +8,8 @@ KING_SIZE = (1920, 1080)
 OVERLAP_X = int(0.2*KING_SIZE[0])
 OVERLAP_Y = int(0.3*KING_SIZE[1])
 DEBUG = True
+#round the chained affine matrix to the nearest 1/ROUND_TO_IDENTITY
+ROUND_TO_IDENTITY = 100
 
 '''
 def getDeltaX(m, kp1, kp2, leftwidth):
@@ -89,79 +91,81 @@ def enforceResize(img) -> np.ndarray:
     img = cv2.resize(img, KING_SIZE, interpolation = cv2.INTER_LINEAR)
     return img
 
+def matrix_similarity_to_identity(matrix):
+    # Extract the 2x2 submatrix
+    submatrix = matrix[:2, :2]
+    # Create the 2x2 identity matrix
+    identity = np.eye(2)
+    # Calculate the Frobenius norm of the difference
+    return np.linalg.norm(submatrix - identity, 'fro')
+
+def chainAffine(matrix1, matrix2) -> np.ndarray:
+    #matrix1 and matrix2 are 2x3 matrices
+    #return the composition of the two matrices
+    #add a bottom row of [0, 0, 1] to each matrix
+    matrix1 = np.vstack([matrix1, [0, 0, 1]])
+    matrix2 = np.vstack([matrix2, [0, 0, 1]])
+    #multiply the two matrices
+    result = np.dot(matrix1, matrix2)
+    #remove the bottom row
+    result = result[:2, :]
+    return result
+
+class ImageEdge:
+    #Keeps track of all the information about how two images are positioned relative to each other
+    def __init__(self, parentNode, childNode):
+        self.parentNode = parentNode
+        self.childNode = childNode
+        self.kp1 = None
+        self.kp2 = None
+        self.matches = None
+        self.img_matches = None
+        self.affineMatrix = None
+
 class ImageNode:
 
     def __init__(self, img: np.ndarray, row: int, col: int):
         self.img = img
         self.row = row
         self.col = col
-
         self.rightNeighbor = None
-        self.rightNeighborMatches = None
-        self.rightComparsionImage = None
-        self.rightNeighborKP1 = None
-        self.rightNeighborKP2 = None
-
         self.downNeighbor = None
-        self.downNeighborMatches = None
-        self.downComparsionImage = None
-        self.downNeighborKP1 = None
-        self.downNeighborKP2 = None
+        self.leftAffineMatrix = None
+        self.upAffineMatrix = None
+        self.chainedAffineMatrix = None
+        self.warpedImg = None
 
     def initRightNeighbor(self, rightNeighbor, siftMethod):
         self.rightNeighbor = rightNeighbor
-        self.setRightNeighborSIFT(siftMethod)
-
-    def initDownNeighbor(self, downNeighbor, siftMethod):
-        self.downNeighbor = downNeighbor
-        self.setDownNeighborSIFT(siftMethod)
-
-    def setRightNeighborSIFT(self, siftMethod):
+        self.rightNeighborEdge = ImageEdge(self, rightNeighbor)
         #Slice self.img so that it only contains the right part of the image, and is overlapx pixels wide
         compImg = self.img[:, KING_SIZE[0] - OVERLAP_X:]
 
         #Slice self.rightNeighbor.img so that it only contains the left part of the image, and is overlapx pixels wide
         compRightNeighborImg = self.rightNeighbor.img[:, :OVERLAP_X]
+        self.setNeighborSIFT(siftMethod, self.rightNeighborEdge, compImg, compRightNeighborImg)
+        rightNeighbor.leftAffineMatrix = self.rightNeighborEdge.affineMatrix
 
-        #Make compImg and compRightNeighborImg grayscale
-        compImg = cv2.cvtColor(compImg, cv2.COLOR_BGR2GRAY)
-        compRightNeighborImg = cv2.cvtColor(compRightNeighborImg, cv2.COLOR_BGR2GRAY)
-
-        #Detect SIFT features
-        kp1, des1 = siftMethod.detectAndCompute(compImg, None)
-        kp2, des2 = siftMethod.detectAndCompute(compRightNeighborImg, None)
-
-        #Create a BFMatcher object
-        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-
-        #Match descriptors
-        matches = bf.match(des1, des2)
-
-        #Sort them in the order of their distance
-        matches = sorted(matches, key = lambda x: x.distance)[:30]
-
-        #Draw the top 30 matches
-        img_matches = cv2.drawMatches(compImg, kp1, compRightNeighborImg, kp2, matches, None, flags=None)
-        self.rightNeighborKP1 = kp1
-        self.rightNeighborKP2 = kp2
-        self.rightNeighborMatches = matches
-        self.rightComparsionImage = img_matches
-
-
-    def setDownNeighborSIFT(self, siftMethod):
+    def initDownNeighbor(self, downNeighbor, siftMethod):
+        self.downNeighbor = downNeighbor
+        self.downNeighborEdge = ImageEdge(self, downNeighbor)
         #Slice self.img so that it only contains the bottom part of the image, and is overlapy pixels high
         compImg = self.img[KING_SIZE[1] - OVERLAP_Y:, :]
 
         #Slice self.downNeighbor.img so that it only contains the top part of the image, and is overlapy pixels high
         compDownNeighborImg = self.downNeighbor.img[:OVERLAP_Y, :]
+        self.setNeighborSIFT(siftMethod, self.downNeighborEdge, compImg, compDownNeighborImg)
+        downNeighbor.upAffineMatrix = self.downNeighborEdge.affineMatrix
 
-        #Make compImg and compRightNeighborImg grayscale
+    def setNeighborSIFT(self, siftMethod, neighborEdge, compImg, compNeighborImg):
+
+        #Make compImg and compNeighborImg grayscale
         compImg = cv2.cvtColor(compImg, cv2.COLOR_BGR2GRAY)
-        compDownNeighborImg = cv2.cvtColor(compDownNeighborImg, cv2.COLOR_BGR2GRAY)
+        compNeighborImg = cv2.cvtColor(compNeighborImg, cv2.COLOR_BGR2GRAY)
 
         #Detect SIFT features
         kp1, des1 = siftMethod.detectAndCompute(compImg, None)
-        kp2, des2 = siftMethod.detectAndCompute(compDownNeighborImg, None)
+        kp2, des2 = siftMethod.detectAndCompute(compNeighborImg, None)
 
         #Create a BFMatcher object
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -172,18 +176,102 @@ class ImageNode:
         #Sort them in the order of their distance
         matches = sorted(matches, key = lambda x: x.distance)[:30]
 
-        #Draw the top 30 matches
-        img_matches = cv2.drawMatches(compImg, kp1, compDownNeighborImg, kp2, matches, None, flags=None)
-        self.downNeighborKP1 = kp1
-        self.downNeighborKP2 = kp2
-        self.downNeighborMatches = matches
-        self.downComparsionImage = img_matches
+        #Draw the top 3 matches
+        img_matches = cv2.drawMatches(compImg, kp1, compNeighborImg, kp2, matches, None, flags=None)
+
+        #calculate the affine matrix.
+        matches = matches[:3]
+        #The source points, SPECFICALLY FOR THE PURPOSES OF AFFINE TRANSFORMATION, 
+        # are the points in the neigbhor image, because the affine matrix will transform the 
+        # points in the neighbor image to the points in the current image
+        #Therefore we use kp2 for the source points
+        srcPts = [kp2[m.trainIdx].pt for m in matches]
+        #The destination points are the points in the current image
+        dstPts = [kp1[m.queryIdx].pt for m in matches]
+
+        #Shift the points in srcPts and dstPts by row*KING_SIZE[1] and col*KING_SIZE[0]
+        #recall that the points are in the form (x, y), not (y, x), and that srcPts should be shifted by the right neighbor's coordinates, and dstPts should be shifted by the current image's coordinates
+        neighbor = neighborEdge.childNode
+        adjustedSrcPts = []
+        adjustedDstPts = []
+        for pt in srcPts:
+            adjustedSrcPts.append((pt[0]+KING_SIZE[0]*neighbor.col, pt[1]+KING_SIZE[1]*neighbor.row))
+        for pt in dstPts:
+            if neighbor.row == self.row:
+                #right neighbor
+                adjustedDstPts.append((pt[0]+KING_SIZE[0]*self.col+KING_SIZE[0]-OVERLAP_X, pt[1]+KING_SIZE[1]*self.row))
+            else:
+                #down neighbor
+                adjustedDstPts.append((pt[0]+KING_SIZE[0]*self.col, pt[1]+KING_SIZE[1]*self.row+KING_SIZE[1]-OVERLAP_Y))
+        srcTri = np.array(adjustedSrcPts).astype(np.float32)
+        dstTri = np.array(adjustedDstPts).astype(np.float32)
+
+        #create the affine matrix
+        affineMatrix = cv2.getAffineTransform(srcTri, dstTri)
+
+        #affineMatrix = np.round(affineMatrix*ROUND_TO_IDENTITY)/ROUND_TO_IDENTITY
+        '''if any(abs(affineMatrix[0][:2]) > 2) or any(abs(affineMatrix[1][:2]) > 2):
+            print(f"affineMatrix is too big: {affineMatrix}. Resetting the rotation to identity.")
+            affineMatrix[:2, :2] = np.eye(2, 2)'''
+
+        if DEBUG:
+            #put text over top of img_matches in the corner, with:
+            # the row and col of the current image
+            # the row and col of the neighbor image
+            # the affine matrix
+            cv2.putText(img_matches, f"Current: row {self.row}, col {self.col}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(img_matches, f"Neighbor: row {neighbor.row}, col {neighbor.col}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(img_matches, f"Affine Matrix Row 1: {[round(x, 3) for x in affineMatrix[0]]}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(img_matches, f"Affine Matrix Row 2: {[round(x, 3) for x in affineMatrix[1]]}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        #update neighborEdge with all the new information in case we need it later
+        neighborEdge.affineMatrix = affineMatrix
+        neighborEdge.kp1 = kp1
+        neighborEdge.kp2 = kp2
+        neighborEdge.matches = matches
+        neighborEdge.img_matches = img_matches
 
     def imWriteComparsionRight(self, path):
-        cv2.imwrite(path+f"/rightComparsion{self.row}{self.col}.png", self.rightComparsionImage)
+        cv2.imwrite(path+f"/rightComparsion{self.row}{self.col}.png", self.rightNeighborEdge.img_matches)
 
     def imWriteComparsionDown(self, path):
-        cv2.imwrite(path+f"/downComparsion{self.row}{self.col}.png", self.downComparsionImage)
+        cv2.imwrite(path+f"/downComparsion{self.row}{self.col}.png", self.downNeighborEdge.img_matches)
+
+    def createWarpedImg(self, rows, cols, imgNodes):
+
+        #chain the affine matrices of all the images in the path to the current image and just go down and right.
+        #images with multiple neighbors can compare affine matrices.
+        # For example, the image at row 1 column 1 can get two different chained affine
+        # matrices depending on whether it's going down or right first. We want to compare the
+        # two to see which one is better.
+
+        if self.row == 0 and self.col == 0:
+            #since we are at the top left corner, we have no neighbors
+            self.chainedAffineMatrix = np.eye(2, 3)
+        elif self.row == 0:
+            #since we are at the top row, we only have one neighbor to the left
+            self.chainedAffineMatrix = chainAffine(self.leftAffineMatrix, imgNodes[self.row][self.col-1].chainedAffineMatrix)
+        elif self.col == 0:
+            #since we are at the leftmost column, we only have one neighbor to the top
+            self.chainedAffineMatrix = chainAffine(self.upAffineMatrix, imgNodes[self.row-1][self.col].chainedAffineMatrix)
+        else:
+            #generate two possibile chained affine matrices, and choose the one with the closest determinant to 1
+            upChain = chainAffine(self.upAffineMatrix, imgNodes[self.row-1][self.col].chainedAffineMatrix)
+            leftChain = chainAffine(self.leftAffineMatrix, imgNodes[self.row][self.col-1].chainedAffineMatrix)
+            self.chainedAffineMatrix = min(upChain, leftChain, key=matrix_similarity_to_identity)
+        #Create a new image that is the size of the final stitched image but a little larger
+        bigImg = np.zeros((rows * (KING_SIZE[1]), cols * (KING_SIZE[0]), 3), dtype=np.uint8)
+        #Put the first image in the final image, starting at (OverlapX, OverlapY)
+        bIh, bIw = bigImg.shape[:2]
+        h, w = self.img.shape[:2]
+        x = KING_SIZE[0]*self.col
+        y = KING_SIZE[1]*self.row
+        bigImg[y:y+h, x:x+w] = self.img
+        #apply the affine matrix to the bigImg
+        self.warpedImg = cv2.warpAffine(bigImg, self.chainedAffineMatrix, (bIw, bIh))
+    
+    def imWriteWarped(self, path):
+        cv2.imwrite(path+f"/warped{self.row}{self.col}.png", self.warpedImg)
 
 # Takes in a 2D array of images and stitches them together
 def stitchMatrix(imgMatrix, subfolder) -> np.ndarray:
@@ -214,50 +302,28 @@ def stitchMatrix(imgMatrix, subfolder) -> np.ndarray:
                 if DEBUG:
                     imgNodes[i][j].imWriteComparsionDown(subfolder)
 
-    #Create a new image that is the size of the final stitched image
-    finalImg = np.zeros((rows * (KING_SIZE[1]), cols * (KING_SIZE[0]), 3), dtype=np.uint8)
-
     #Get variables to calculate the position of the image in the final image
     imgHeight = KING_SIZE[1]
     imgWidth = KING_SIZE[0]
     overlapHeight = OVERLAP_Y
     overlapWidth = OVERLAP_X
 
-    #Put the first image in the final image, starting at (OverlapX, OverlapY)
-    srcTri = np.array([[0, 0], [1, 0], [0, 1]]).astype(np.float32)
-    dstTri = np.array([[0, 0], [2, 0], [0.5, 1.5]]).astype(np.float32)
-    affineMatrix = cv2.getAffineTransform(srcTri, dstTri)
-    print(affineMatrix)
-    imgNodes[0][0].img = cv2.warpAffine(imgNodes[0][0].img, affineMatrix, (3*imgWidth, 2*imgHeight))
-    h, w = imgNodes[0][0].img.shape[:2]
-    finalImg[overlapHeight:overlapHeight+h, overlapWidth:overlapWidth+w] = imgNodes[0][0].img
+    #imgNodes[0][0].img = cv2.warpAffine(imgNodes[0][0].img, affineMatrix, (3*imgWidth, 2*imgHeight))
 
-    # For each image, calculate the best way to rotate and translate it so that it fits with its neighbors
+    # Create the warped images by going in a diagonal path through the matrix
+    for L in range(rows+cols-1):
+        for i in range(L+1):
+            j = L-i
+            if i < rows and j < cols:
+                imgNodes[i][j].createWarpedImg(rows, cols, imgNodes)
+                if DEBUG:
+                    imgNodes[i][j].imWriteWarped(subfolder)
+    
+    #Create the final image
+    finalImg = np.zeros((rows * (KING_SIZE[1]), cols * (KING_SIZE[0]), 3), dtype=np.uint8)
     for i in range(rows):
         for j in range(cols):
-            if j < cols - 1:
-                # Get the best matching keypoints between current image and right neighbor
-                m = imgNodes[i][j].rightNeighborMatches
-                for match in m:
-                    i1 = match.queryIdx  # Index of keypoint in current image
-                    i2 = match.trainIdx  # Index of matching keypoint in right neighbor
-                    p1 = imgNodes[i][j].rightNeighborKP1[i1].pt  # Point coordinates in current image
-                    p2 = imgNodes[i][j].rightNeighborKP2[i2].pt  # Point coordinates in right neighbor
-                    #print(p1, p2)
-            if i < rows - 1:
-                # Get the best matching keypoints between current image and down neighbor
-                m = imgNodes[i][j].downNeighborMatches
-                for match in m:
-                    i1 = match.queryIdx  # Index of keypoint in current image
-                    i2 = match.trainIdx  # Index of matching keypoint in down neighbor
-                    p1 = imgNodes[i][j].downNeighborKP1[i1].pt  # Point coordinates in current image
-                    p2 = imgNodes[i][j].downNeighborKP2[i2].pt  # Point coordinates in down neighbor
-                    #print(p1, p2)
-
-            #Calculate the transform
-
-            
-    
+            finalImg = cv2.max(finalImg, imgNodes[i][j].warpedImg)
 
     # Return the stitched image
     return finalImg
