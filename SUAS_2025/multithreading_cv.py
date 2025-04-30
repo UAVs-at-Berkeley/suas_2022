@@ -1,114 +1,173 @@
 from threading import Thread
-import cv2
-import os
 from CountsPerSec import CountsPerSec
+import time
+from dronekit import connect, VehicleMode, LocationGlobalRelative, mavutil, Command
+import numpy
+import math
+import vehicle_state as vs
+import utils
+import cv2
+import image_capture_modified as imcap
+import RTMP
+from video_maker import VideoMaker
 
-class VideoGet:
-    """
-    Class that continuously gets frames from a VideoCapture object
-    with a dedicated thread.
-    """
+# Set up option parsing to get connection string
+import argparse
+parser = argparse.ArgumentParser(description='Commands vehicle using vehicle.simple_goto.')
+parser.add_argument('-c', '--connect', nargs='?', const="/dev/ttyACM0", type=str, default="/dev/ttyACM0",
+                    help="Vehicle connection target string. If not specified, SITL automatically started and used.")
+parser.add_argument('-v', '--verbose', action="store_true",
+                    help="Verbose flag prints out all vehicle state parameters upon connection to autopilot.")
+parser.add_argument('-s', '--stream', action="store_true",
+                    help="Set up RTMP livestream of camera feed")
+parser.add_argument('-sg', '--stopgo', action="store_true",
+                    help="If used, drone will stop at waypoints taking mapping photos")
+parser.add_argument('-vid', '--video', action="store_true",
+                    help="Used to determine if recording style is video stream (true/include flag) or singular images (false/do not include flag)")
+parser.add_argument('-rts', '--rtsp', nargs='?', const="rtsp://192.168.144.25:8554/main.264", type=str, default="rtsp://192.168.144.25:8554/main.264",
+                   help="RTSP connection string. By default rtsp://192.168.144.25:8554/main.264 is used")
+parser.add_argument('-rtm', '--rtmp', nargs='?', const="rtmp://127.0.0.1:1935/live/webcam", type=str, default="rtmp://127.0.0.1:1935/live/webcam",
+                   help="RTMP connection string. By default rtmp://192.168.142.36:1935/live/webcam is used")                    
+args = parser.parse_args()
 
-    def __init__(self, src=0):
-        self.stream = cv2.VideoCapture(src)
-        (self.grabbed, self.frame) = self.stream.read()
-        self.stopped = False
+lastwaypoint = 7
 
-    def start(self):
-        Thread(target=self.get, args=()).start()
-        return self
+connection_string = args.connect
+verbose = args.verbose
+show_stream = args.stream
+stop_go_mapping = args.stopgo
+vid_mapping = args.video
+rtsp_url = args.rtsp
+rtmp_url = args.rtmp
 
-    def get(self):
-        while not self.stopped:
-            if not self.grabbed:
-                self.stop()
-            else:
-                (self.grabbed, self.frame) = self.stream.read()
+sitl = None
+cap = None
+rtmp = None
+video_maker = None
+mission_term = True
 
-    def stop(self):
-        self.stopped = True
+def drone_control():
+    # if no connection string start sitl
+    if not connection_string:
+        import dronekit_sitl
+        sitl = dronekit_sitl.start_default()
+        connection_string = sitl.connection_string()
 
-class VideoShow:
-    """
-    Class that continuously shows a frame using a dedicated thread.
-    """
+    # Connect to the Vehicle
+    print('Connecting to vehicle on: %s' % connection_string)
+    vehicle = connect(ip=connection_string, wait_ready=True, timeout=30, heartbeat_timeout=60, baud=115200)
+    # wait_ready: If ``True`` wait until all default attributes have downloaded before the method returns (default is ``None``).
+    #             The default attributes to wait on are: :py:attr:`parameters`, :py:attr:`gps_0`, :py:attr:`armed`, :py:attr:`mode`, and :py:attr:`attitude`.
+    # timeout: timeout in seconds for wait_ready, aka time to wait for attributes to download from autopilot before throwing exception
+    # heartbeat_timeout: time to wait in seconds for heartbeat connection with autopilot
 
-    def __init__(self, frame=None):
-        self.frame = frame
-        self.stopped = False
+    if verbose:
+        vs.print_vehicle_state(vehicle)
 
-    def start(self):
-        Thread(target=self.show, args=()).start()
-        return self
+    cmds = utils.downloadCommands(vehicle)
 
-    def show(self):
-        while not self.stopped:
-            cv2.imshow("Video", self.frame)
-            if cv2.waitKey(1) == ord("q"):
-                self.stopped = True
+    #Wait until vehicle is armable
+    counter = 0
+    while not vehicle.is_armable:
+        # If cannot acheive armable in 120 seconds, reboot the autopilot
+        if counter == 1200:
+            vehicle.reboot()
+        print("Waiting for vehicle to initialise...")
+        counter += 1
 
-    def stop(self):
-        self.stopped = True
+        if KeyboardInterrupt:
+            mission_term = False
+        time.sleep(1)
+    
+    while vehicle.mode != VehicleMode("AUTO"):
+        print("Currently in manual mode... Waiting for pilot to switch to AUTO")
+        time.sleep(3)
+    
+    print("Entered AUTO mode")
+    vehicle.gimbal.rotate(-90, 0, 0)
+    try:
+        while True:
+            nextwaypoint=vehicle.commands.next
+            if not nextwaypoint:
+                break
+            print('Distance to waypoint (%s): %s' % (nextwaypoint, utils.distance_to_current_waypoint()))
 
-def threadVideoGet(source=0):
-    """
-    Dedicated thread for grabbing video frames with VideoGet object.
-    Main thread shows video frames.
-    """
+            time.sleep(3)
 
-    video_getter = VideoGet(source).start()
-    cps = CountsPerSec().start()
+    except KeyboardInterrupt:
+        exit(0)
+    
+    utils.RTL(vehicle)
 
-    while True:
-        if (cv2.waitKey(1) == ord("q")) or video_getter.stopped:
-            video_getter.stop()
-            break
+    vehicle.gimbal.rotate(0, 0, 0)
 
-        frame = video_getter.frame
-        frame = putIterationsPerSec(frame, cps.countsPerSec())
-        cv2.imshow("Video", frame)
-        cps.increment()
+    while vehicle.armed:
+        print("Returning to land. Will terminate once landed.")
+        time.sleep(3)
+    
+    mission_term = False
+    print("Close vehicle object")
+    vehicle.close()
 
-def threadVideoShow(source=0):
-    """
-    Dedicated thread for showing video frames with VideoShow object.
-    Main thread grabs video frames.
-    """
+    if sitl is not None:
+        sitl.stop()
 
-    cap = cv2.VideoCapture(source)
-    (grabbed, frame) = cap.read()
-    video_shower = VideoShow(frame).start()
-    cps = CountsPerSec().start()
+def camera_control():
+    cap = cv2.VideoCapture(rtsp_url)
+    if not cap.isOpened():
+        print("No connection")
+        exit(1)
 
-    while True:
-        (grabbed, frame) = cap.read()
-        if not grabbed or video_shower.stopped:
-            video_shower.stop()
-            break
+    if show_stream:
+        rtmp = RTMP.RTMPSender(rtmp_url)
+        rtmp.start()
 
-        frame = putIterationsPerSec(frame, cps.countsPerSec())
-        video_shower.frame = frame
-        cps.increment()
+    if vid_mapping:
+        video = VideoMaker(cap)
+        video.start()
 
-def threadBoth(source=0):
-    """
-    Dedicated thread for grabbing video frames with VideoGet object.
-    Dedicated thread for showing video frames with VideoShow object.
-    Main thread serves only to pass frames between VideoGet and
-    VideoShow objects/threads.
-    """
+    if show_stream:
+        ret, frame = cap.read()
+        rtmp.setFrame(frame)
+        imcap.image_save(frame)
+    try:
+        while True:
+            if not mission_term:
+                break
+            frame = None
+            if show_stream:
+                ret, frame = cap.read()
+                rtmp.setFrame(frame)
+            await asyncio.sleep(0)
+    except KeyboardInterrupt:
+        if show_stream:
+            rtmp.stop()
+        if vid_mapping:
+            video.stop()
+        cap.release()
+        cv2.destroyAllWindows()
+        # quit
+        exit(0)
 
-    video_getter = VideoGet(source).start()
-    video_shower = VideoShow(video_getter.frame).start()
-    cps = CountsPerSec().start()
+    if show_stream:
+        rtmp.stop()
 
-    while True:
-        if video_getter.stopped or video_shower.stopped:
-            video_shower.stop()
-            video_getter.stop()
-            break
+    if vid_mapping:
+        video.stop()
 
-        frame = video_getter.frame
-        frame = putIterationsPerSec(frame, cps.countsPerSec())
-        video_shower.frame = frame
-        cps.increment()
+    cap.release()
+    cv2.destroyAllWindows()
+    
+
+def yolo():
+    for letter in 'abcdefghij':
+        print(f"Letter: {letter}")
+        await asyncio.sleep(1)  # Non-blocking sleep
+
+drone = Thread(target=drone_control(), args=()).start()
+camera = Thread(target=camera_control(), args=()).start()
+
+while True:
+    if not mission_term:
+        drone.stop()
+        camera.stop()
