@@ -52,8 +52,8 @@ mod_rec = drawRectangles(edges, 3, 20, 200)
 orb = cv2.ORB_create(nfeatures=250)
 #kp_still, des_still = orb.detectAndCompute(still_image, None)
 kpts_still = orb.detect(mod_rec, None)
-desc = cv2.xfeatures2d.BEBLID_create(0.75)
-kp_still, des_still = desc.compute(mod_rec, kpts_still)
+desc = cv2.xfeatures2d.BEBLID_create(1)
+kp_still, des_still = desc.compute(still_image, kpts_still)
 
 still_kps = cv2.drawKeypoints(still_image, kp_still, None, color=(0,255,0), flags=0)
 
@@ -64,7 +64,7 @@ index_params = dict(algorithm=6,  # FLANN_INDEX_LSH for ORB
                     table_number=6,  # number of hash tables
                     key_size=12,     # size of the hashed key
                     multi_probe_level=1)  # multi-probe level
-search_params = dict(checks=150)  # number of checks (higher is more accurate)
+search_params = dict(checks=1000)  # number of checks (higher is more accurate)
 
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 
@@ -75,6 +75,11 @@ cap = cv2.VideoCapture(video_path)
 orb2 = cv2.ORB_create(nfeatures=150)
 
 cluster_count = 6
+ret, frame = cap.read()
+fourcc = cv2.VideoWriter_fourcc(*"mp4v") 
+fps     = cap.get(cv2.CAP_PROP_FPS) or 30       # fall back if camera gives 0
+h, w    = frame.shape[:2]                       # size must stay constant
+out     = cv2.VideoWriter("output.mp4", fourcc, fps, (w, h))
 
 # 5. Process each frame of the video
 while cap.isOpened():
@@ -93,7 +98,7 @@ while cap.isOpened():
     # 6. Detect keypoints and descriptors in the frame
     #kp_frame, des_frame = orb2.detectAndCompute(gray_frame, None)
     kpts_frame = orb.detect(mod_rec, None)
-    kp_frame, des_frame = desc.compute(mod_rec, kpts_frame)
+    kp_frame, des_frame = desc.compute(gray_frame, kpts_frame)
 
     # 7. Match descriptors using FLANN
     if des_frame is not None:
@@ -136,24 +141,30 @@ while cap.isOpened():
         count = Counter(kmeans.labels_)
         # print(count)
         count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
+
+
+
+        
         largest_cluster_idx = count_list[0][0]
         # print(largest_cluster_idx)
         max_centroid = kmeans.cluster_centers_[largest_cluster_idx]
         # print(max_centroid)
         y = dataset[dataset['cluster'] == largest_cluster_idx]
-        for row in y.itertuples():
-            print(row)
 
-        plt.scatter(dataset['still_x_pt'], dataset['still_y_pt'], c=dataset['cluster'])
-        plt.legend()
-        plt.colorbar()
+        # for row in y.itertuples():
+        #     print(row)
+
+        # plt.scatter(dataset['still_x_pt'], dataset['still_y_pt'], c=dataset['cluster'])
+        # plt.legend()
+        # plt.colorbar()
         # plt.show()
         # 9. Draw the matches
         matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
         # Show the matched image
-        cv2.imshow("Still image key points", still_kps)
+        # cv2.imshow("Still image key points", still_kps)
         cv2.imshow('Matches', matched_img)
+        # out.write(matched_img)
 
     time.sleep(0.4)
 
@@ -163,4 +174,5 @@ while cap.isOpened():
 
 # Release the video capture and close the window
 cap.release()
+out.release() 
 cv2.destroyAllWindows()
