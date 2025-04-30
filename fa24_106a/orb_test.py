@@ -26,7 +26,8 @@ def drawRectangles(img_gray, r, min_gap, white_thresh):
         tl = (max(0, x - r), max(0, y - r))          # top-left
         br = (min(w - 1, x + r), min(h - 1, y + r))  # bottom-right
 
-        cv2.rectangle(out, tl, br, color=(255, 255, 255), thickness=-1)
+        # cv2.rectangle(out, tl, br, color=(255, 255, 255), thickness=-1)
+        cv2.circle(out, tl, 2, color=(255, 255, 255), thickness=-1)
         centres.append((x, y))
 
     return out
@@ -38,7 +39,8 @@ def drawRectangles(img_gray, r, min_gap, white_thresh):
 orb = cv2.ORB_create()
 
 # Read the image
-img = cv2.imread('google_earth.png', cv2.IMREAD_GRAYSCALE)
+# img = cv2.imread('google_earth.png', cv2.IMREAD_GRAYSCALE)
+img = cv2.imread('earth1.png', cv2.IMREAD_GRAYSCALE)
 
 blurred = cv2.GaussianBlur(img, (5,5), 0)
 edges = cv2.Canny(blurred, 50, 200)
