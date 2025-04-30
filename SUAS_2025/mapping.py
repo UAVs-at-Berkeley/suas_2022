@@ -262,35 +262,36 @@ while not vehicle.is_armable:
 while vehicle.mode != VehicleMode("AUTO"):
     print("Currently in manual mode... Waiting for pilot to switch to AUTO")
     time.sleep(3)
-    
-print("Entered AUTO mode")
 
+print("Entered AUTO mode")
 vehicle.gimbal.rotate(-90, 0, 0)
-utils.setYaw(vehicle, 90)
+utils.setYaw(vehicle, 325)
+
 try:
     while True:
         nextwaypoint=vehicle.commands.next
         frame = None
+        ret, frame = cap.read()
+        if not ret:
+            continue
         if show_stream:
-            ret, frame = cap.read()
             rtmp.setFrame(frame)
 
-        if not nextwaypoint:
+        if nextwaypoint == lastwaypoint:
             break
 
-        if distance_to_current_waypoint() < 1 and vehicle.groundspeed < 0.5:
-            waypoint = getCurrentWaypoint()
-            time.sleep(1)
+        while utils.distance_to_current_waypoint(vehicle) < 2 and vehicle.groundspeed < 1:
+            waypoint = utils.getCurrentWaypoint(vehicle)
             #if streaming to rtmp, just save frame from earlier, otherwise capture and save
             if show_stream:
                 imcap.image_save(frame, coordinates = (waypoint.lat, waypoint.lon))
             else:
-                frame = imcap.capture_image_and_save(cap, coordinates = (waypoint.lat, waypoint.lon))
-            time.sleep(1)
+                imcap.image_save(frame, coordinates = (waypoint.lat, waypoint.lon))
+            
 
         print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
 
-        time.sleep(3)
+        time.sleep(1)
 except KeyboardInterrupt:
     if show_stream:
         rtmp.stop()
@@ -301,17 +302,13 @@ except KeyboardInterrupt:
     # quit
     exit(0)
 
-utils.RTL(vehicle)
-
-vehicle.gimbal.rotate(0, 0, 0)
-
 while vehicle.armed:
     print("Returning to land. Will terminate once landed.")
     time.sleep(3)
 
 utils.RTL(vehicle)
 
-while vehicle.armed = "ARMED":
+while vehicle.armed == "ARMED":
     print("Returning to land. Will terminate once landed.")
     time.sleep(3)
 

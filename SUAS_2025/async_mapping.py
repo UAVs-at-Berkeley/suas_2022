@@ -29,7 +29,7 @@ parser.add_argument('-rtm', '--rtmp', nargs='?', const="rtmp://127.0.0.1:1935/li
                    help="RTMP connection string. By default rtmp://127.0.0.1:1935/live/webcam is used")                    
 args = parser.parse_args()
 
-lastwaypoint = 7
+lastwaypoint = 4 #set equal to waypoint number-2
 
 connection_string = args.connect
 verbose = args.verbose
@@ -45,7 +45,7 @@ rtmp = None
 video_maker = None
 mission_term = True
 
-async def drone_control():
+async def drone_control(verbose, connection_string):
     # if no connection string start sitl
     if not connection_string:
         import dronekit_sitl
@@ -76,11 +76,11 @@ async def drone_control():
 
         if KeyboardInterrupt:
             mission_term = False
-        asyncio.sleep(1)
+        await asyncio.sleep(1)
     
     while vehicle.mode != VehicleMode("AUTO"):
         print("Currently in manual mode... Waiting for pilot to switch to AUTO")
-        asyncio.sleep(3)
+        await asyncio.sleep(100)
     
     print("Entered AUTO mode")
     vehicle.gimbal.rotate(-90, 0, 0)
@@ -89,9 +89,9 @@ async def drone_control():
             nextwaypoint=vehicle.commands.next
             if not nextwaypoint:
                 break
-            print('Distance to waypoint (%s): %s' % (nextwaypoint, utils.distance_to_current_waypoint()))
+            print('Distance to waypoint (%s): %s' % (nextwaypoint, utils.distance_to_current_waypoint(vehicle)))
 
-            asyncio.sleep(3)
+            await asyncio.sleep(3)
 
     except KeyboardInterrupt:
         exit(0)
@@ -102,7 +102,7 @@ async def drone_control():
 
     while vehicle.armed:
         print("Returning to land. Will terminate once landed.")
-        asyncio.sleep(3)
+        await asyncio.sleep(3)
     
     mission_term = False
     print("Close vehicle object")
@@ -111,7 +111,7 @@ async def drone_control():
     if sitl is not None:
         sitl.stop()
 
-async def camera_control():
+async def camera_control(rtsp_url, show_stream, rtmp_url, vid_mapping):
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print("No connection")
@@ -122,8 +122,7 @@ async def camera_control():
         rtmp.start()
 
     if vid_mapping:
-        video = VideoMaker(cap)
-        video.start()
+        vid_matches = cv2.VideoWriter('vid_thread.avi', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(cap.get(3)), int(cap.get(4))))
 
     if show_stream:
         ret, frame = cap.read()
@@ -134,6 +133,8 @@ async def camera_control():
             if not mission_term:
                 break
             frame = None
+            if vid_mapping:
+                vid_matches.write(frame)
             if show_stream:
                 ret, frame = cap.read()
                 rtmp.setFrame(frame)
@@ -142,7 +143,7 @@ async def camera_control():
         if show_stream:
             rtmp.stop()
         if vid_mapping:
-            video.stop()
+            vid_matches.release()
         cap.release()
         cv2.destroyAllWindows()
         # quit
@@ -152,7 +153,7 @@ async def camera_control():
         rtmp.stop()
 
     if vid_mapping:
-        video.stop()
+        vid_matches.release()
 
     cap.release()
     cv2.destroyAllWindows()
@@ -165,8 +166,8 @@ async def yolo():
 
 
 async def main():
-    camera = asyncio.create_task(camera_control())
-    drone = asyncio.create_task(drone_control())  # Run coroutines concurrently
+    camera = asyncio.create_task(camera_control(rtsp_url, show_stream, rtmp_url, vid_mapping))
+    drone = asyncio.create_task(drone_control(verbose, connection_string))  # Run coroutines concurrently
 
     await drone
     await camera

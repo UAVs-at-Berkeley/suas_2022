@@ -4,7 +4,7 @@ import cv2
 import time
 
 # Initialize the SIFT detector
-orb = cv2.ORB_create()
+
 #"rtspsrc location='rtsp://192.168.144.25:8554/main.264' protocols=tcp ! rtph265depay ! avdec_h265 ! nvvideoconvert ! appsink"
 # gst-launch-1.0 rtspsrc location=rtsp://192.168.144.25:8554/main.264 protocols=tcp latency=0 ! rtph265depay ! h265parse ! nvv4l2decoder ! nvvideoconvert ! queue ! autovideosink
 # RTSP stream URL decodebin ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! appsink rtph264depay ! h264parse ! nvv4l2decoder ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! fakesink
@@ -21,6 +21,7 @@ if not cap.isOpened():
     print("Error: Unable to open the video stream.")
     exit()
 
+vid_matches = cv2.VideoWriter('mapping2.avi', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(cap.get(3)), int(cap.get(4))))
 ct = 0
 while True:
     # Capture frame-by-frame
@@ -40,16 +41,17 @@ while True:
             break
 
         # Convert the frame to grayscale (ORB works on grayscale images)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
 
         # Detect keypoints and compute descriptors
-        keypoints, descriptors = orb.detectAndCompute(gray, None)
+        
 
         # Draw keypoints on the frame
-        frame_with_keypoints = cv2.drawKeypoints(gray, keypoints, frame)
+       
 
         # Display the resulting frame
-        cv2.imshow('ORB Keypoints', frame_with_keypoints)
+        vid_matches.write(frame)
+        
             
     # Exit if 'q' is pressed
     if cv2.waitKey(1) & 0xFF == ord('q'):

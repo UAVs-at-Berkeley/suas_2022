@@ -1,5 +1,6 @@
 from dronekit import connect, VehicleMode, LocationGlobalRelative, mavutil, Command
 import math
+import time
 
 # For setting custom mavlink command can either encode with vehicle.message_factory.command_long_encode() and send with vehicle.send_mavlink()
 # or can encode and send at once with vehicle.command_long_send()
