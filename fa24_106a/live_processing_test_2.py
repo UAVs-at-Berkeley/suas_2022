@@ -10,7 +10,7 @@ from operator import itemgetter
 import math
 
 
-def drawRectangles(img_gray, r, min_gap, white_thresh):
+def drawRectangles(img_gray, r, min_gap, white_thresh, drawing_img):
     h, w = img_gray.shape
     # convert to BGR so we can overwrite with white easily
     out = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
@@ -31,27 +31,31 @@ def drawRectangles(img_gray, r, min_gap, white_thresh):
         tl = (max(0, x - r), max(0, y - r))          # top-left
         br = (min(w - 1, x + r), min(h - 1, y + r))  # bottom-right
 
-        # cv2.rectangle(out, tl, br, color=(255, 255, 255), thickness=-1)
-        cv2.circle(out, tl, 2, color=(255, 255, 255), thickness=-1)
+        # cv2.rectangle(drawing_img, tl, br, color=(0, 0, 0), thickness=-1)
+        cv2.circle(drawing_img, tl, 2, color=(0, 0, 0), thickness=-1)
+        # cv2.circle(drawing_img, tl, 2, color=(255, 255, 255), thickness=-1)
         centres.append((x, y))
 
-    return out
-
+    return drawing_img
 
 # 1. Load the still image and the video
-still_image = cv2.imread('earth1.png', cv2.IMREAD_GRAYSCALE)
-video_path = 'google_movie.mp4'
+# still_image = cv2.imread('pair2.png', cv2.IMREAD_GRAYSCALE)
+# video_path = 'pair2.mp4'
+still_image = cv2.imread('pair1.png', cv2.IMREAD_GRAYSCALE)
+video_path = 'pair1.mp4'
 #video_path = 'lowaltflight.mp4'
+
+# earth_2 and vid_2 are pairs
 
 # Image preprocess
 blurred = cv2.GaussianBlur(still_image, (5,5), 0)
 edges = cv2.Canny(blurred, 50, 200)
-mod_rec = drawRectangles(edges, 3, 20, 200)
+# mod_rec = drawRectangles(edges, 3, 20, 200, still_image)
 
 # 2. Detect keypoints and descriptors in the still image using ORB
-orb = cv2.ORB_create(nfeatures=250)
+orb = cv2.ORB_create(nfeatures=450)
 #kp_still, des_still = orb.detectAndCompute(still_image, None)
-kpts_still = orb.detect(mod_rec, None)
+kpts_still = orb.detect(still_image, None)
 desc = cv2.xfeatures2d.BEBLID_create(1)
 kp_still, des_still = desc.compute(still_image, kpts_still)
 
@@ -60,6 +64,10 @@ still_kps = cv2.drawKeypoints(still_image, kp_still, None, color=(0,255,0), flag
 
 
 # 3. Initialize the FLANN-based matcher
+# index_params = dict(algorithm=6,  # FLANN_INDEX_LSH for ORB
+#                     table_number=6,  # number of hash tables
+#                     key_size=12,     # size of the hashed key
+#                     multi_probe_level=1)  # multi-probe level
 index_params = dict(algorithm=6,  # FLANN_INDEX_LSH for ORB
                     table_number=6,  # number of hash tables
                     key_size=12,     # size of the hashed key
@@ -72,17 +80,18 @@ flann = cv2.FlannBasedMatcher(index_params, search_params)
 print("cap is unopen")
 cap = cv2.VideoCapture(video_path)
 
-orb2 = cv2.ORB_create(nfeatures=150)
 
 cluster_count = 6
 ret, frame = cap.read()
-fourcc = cv2.VideoWriter_fourcc(*"mp4v") 
-fps     = cap.get(cv2.CAP_PROP_FPS) or 30       # fall back if camera gives 0
-h, w    = frame.shape[:2]                       # size must stay constant
-out     = cv2.VideoWriter("output.mp4", fourcc, fps, (w, h))
+# fourcc = cv2.VideoWriter_fourcc(*"mp4v") 
+# fps     = cap.get(cv2.CAP_PROP_FPS) or 30       # fall back if camera gives 0
+# h, w    = frame.shape[:2]                       # size must stay constant
+# out     = cv2.VideoWriter("output.mp4", fourcc, fps, (w, h))
 
 # 5. Process each frame of the video
 while cap.isOpened():
+    ret, frame = cap.read()
+    ret, frame = cap.read()
     ret, frame = cap.read()
     if not ret:
         break
@@ -93,11 +102,11 @@ while cap.isOpened():
     # Image preprocess
     blurred = cv2.GaussianBlur(gray_frame, (5,5), 0)
     edges = cv2.Canny(blurred, 50, 200)
-    mod_rec = drawRectangles(edges, 3, 20, 200)
+    # mod_rec = drawRectangles(edges, 3, 20, 200,gray_frame )
 
     # 6. Detect keypoints and descriptors in the frame
     #kp_frame, des_frame = orb2.detectAndCompute(gray_frame, None)
-    kpts_frame = orb.detect(mod_rec, None)
+    kpts_frame = orb.detect(gray_frame, None)
     kp_frame, des_frame = desc.compute(gray_frame, kpts_frame)
 
     # 7. Match descriptors using FLANN
@@ -116,7 +125,7 @@ while cap.isOpened():
         for m in matches:
             if len(m) == 2:  # Ensure that we have two matches
                 # Apply Lowe's ratio test
-                if m[0].distance < 0.95 * m[1].distance:
+                if m[0].distance < 0.85 * m[1].distance:
                     still_pt = kp_still[m[0].queryIdx].pt
                     frame_pt = kp_frame[m[0].trainIdx].pt
                     good_matches.append(m[0])
@@ -159,7 +168,7 @@ while cap.isOpened():
         # plt.colorbar()
         # plt.show()
         # 9. Draw the matches
-        matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        matched_img = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
         # Show the matched image
         # cv2.imshow("Still image key points", still_kps)
@@ -174,5 +183,5 @@ while cap.isOpened():
 
 # Release the video capture and close the window
 cap.release()
-out.release() 
+# out.release() 
 cv2.destroyAllWindows()
