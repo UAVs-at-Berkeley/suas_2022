@@ -16,16 +16,19 @@ still_image_dict = {
     0:('37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
     # 1:('pair1.png', 37.872312, 122.319072, 170.3, 318), 
     1:('pair2.png', 37.8722765, 122.3193286, 279.09, 318), 
+
     2:('37.874496H_122.322454W_242.73H_297.8W.png', 37.874496, 122.322454, 242.73, 297.8), 
     3:('37.874496N_122.319072W_242.73H_364.08W.png', 37.874496, 122.319072, 242.73, 364.08)
 }
 
+vid = ('still_vid.mp4', 37.8722765, 122.3193286, 223.73, 300)
 
 r_earth = 6378000
 
 # Video File
-video_path = "pair2.mp4"
-cap = cv2.VideoCapture(video_path)
+# video_path = "still_vid.mp4"
+
+cap = cv2.VideoCapture(vid[0])
 ret, frame = cap.read()
 # print("frame", frame.shape[1])
 
@@ -36,21 +39,16 @@ ret, frame = cap.read()
 drone_alt = 30
 # last_prediction_lat = 37.872312
 # last_prediction_lon = 122.319072
-last_prediction_lat = 37.8714191 #vehicle.home_location.lat
-last_prediction_lon = 122.3171289 # vehicle.home_location.lon
+initial_pos = (37.8714191, 122.3171289)
+last_prediction_lat = initial_pos[0] #vehicle.home_location.lat
+last_prediction_lon = initial_pos[1] # vehicle.home_location.lon
 # h_fov = 71.5
 # d_fov = 79.5
 cam_size = (frame.shape[1], frame.shape[0])
 droner_lat = 0
 droner_lon = 0
 
-cam_x = 318
-cam_y = 170.3
-# print(cam_y)
-cam_x_size = cam_x / cam_size[0]
-# print(cam_x_size)
-cam_y_size = cam_y / cam_size[1]
-# print(cam_y_size)
+
 
 
 def get_distance_metres_pts(aLocation1, aLocation2):
@@ -118,6 +116,9 @@ print(x_size)
 y_size = still_image_dict[1][3] / vertical_size
 print(y_size)
 
+frame_x_size = vid[4] / cam_size[1]
+frame_y_size = vid[2] / cam_size[0]
+
 # 2. Detect keypoints and descriptors in the still image using ORB
 orb = cv2.ORB_create(nfeatures=500)
 #kp_still, des_still = orb.detectAndCompute(still_image, None)
@@ -139,7 +140,7 @@ index_params = dict(algorithm=6,  # FLANN_INDEX_LSH for ORB
                     table_number=6,  # number of hash tables
                     key_size=12,     # size of the hashed key
                     multi_probe_level=1)  # multi-probe level
-search_params = dict(checks=100)  # number of checks (higher is more accurate)
+search_params = dict(checks=1000)  # number of checks (higher is more accurate)
 
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 
@@ -155,7 +156,8 @@ orb2 = cv2.ORB_create(nfeatures=150)
 cluster_count = 6
 total_dist_traveled = 0
 
-vid_matches = cv2.VideoWriter('vid_matches.avi', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(horizontal_size+cap.get(3)), int(max([vertical_size, cap.get(4)]))))
+# TODO: Everytime the image changes, look at the output frame
+vid_matches = cv2.VideoWriter('vid_matches.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 20, (2084 , 975))
 ct = 0
 # 5. Process each frame of the video
 while cap.isOpened():
@@ -163,13 +165,10 @@ while cap.isOpened():
 
     ct += 1
     # starts every 20 frames
-    if (ct >= 15):
+    if (ct >= 5):
         ct = 0
         if not ret:
             break
-
-        # Drone vision edit
-        drone_alt = 387
 
         # Convert the frame to grayscale
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -219,33 +218,13 @@ while cap.isOpened():
             
             # print("good_matches: ", good_matches)
             dataset = pd.DataFrame(good_matches_xy)
-            # X = dataset.drop(columns=['frame_x_pt', 'frame_y_pt'])
-
-
-            # kmeans = KMeans(n_clusters=cluster_count, n_init=10)
-            # label = kmeans.fit_predict(X)
-            # dataset['cluster'] = kmeans.labels_
-            # count = Counter(kmeans.labels_)
-
-
-            # count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
-
             # This finds the centroid of the image position and rotation
             centroid_gps_lat = 0
             centroid_gps_long = 0
             centroid_cluster_idx = 0
             # print("medians: ", medians)
 
-            
 
-            # matched_img_1 = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-
-            # cv2.imshow("matches", matched_img_1)
-            # if cv2.waitKey(1) & 0xFF == ord('q'):
-            #     break
-            # if centroid_gps_lat == 0 or centroid_gps_long == 0:
-            #     print("couldnt find centroid")
-            #     continue
 
 
             cam_gps_long = 0
@@ -261,35 +240,43 @@ while cap.isOpened():
             # Compare to the frame to the still image
             for row in dataset.itertuples():
                 #print(row)
-                x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * (180 / math.pi)
-                x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
+                # Moves the point down to where the match is to find the global coordinate of othe point
+                x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * (180 / math.pi) 
+                x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180)) 
 
-                still_gps_lat = x_lat
-                still_gps_long = x_long
-                # print("gps_coor", (x_lat, x_long))
-                # print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)) # move the coordinate to the top 
-                # print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)) # move the coordinate to the left
-                frame_y = (((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)
-                frame_x = (((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)
-                cam_gps_lat = still_gps_lat - (frame_y/ r_earth) * (180 / math.pi)
-                cam_gps_long = still_gps_long + (frame_x / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
+                # move the origin coordinate to the top left
+                frame_y = (((row.frame_y_pt) - cam_size[1]/2))
+                frame_x = (((row.frame_x_pt) - cam_size[0]/2)) 
+                
+                #Detect the difference between the 2 frames
+                cam_gps_lat = x_lat - (frame_y * frame_y_size/ r_earth) * (180 / math.pi) 
+                cam_gps_long = x_long + (frame_x * frame_x_size / r_earth) * (180 / math.pi) / math.cos(x_lat*math.pi/180)
                 cam_gps_lat_sum.append(cam_gps_lat)
                 cam_gps_long_sum.append(cam_gps_long) 
                 counter+=1
                     #break
             # TODO: The error is showing at the end
-            if cam_gps_lat == 0 or cam_gps_long == 0:
-                print("exiting")
+            # if cam_gps_lat == 0 or cam_gps_long == 0:
+            #     print("exiting")
+            #     continue
+            if len(cam_gps_lat_sum) == 0 or len(cam_gps_long_sum) == 0:
                 continue
 
-            # TODO: Change this so that the error is only shown at the end
-            # Get the final and initial position from google maps
-            # get the estimated position that results from the orb matching
-
+            # median
             cam_gps_lat = statistics.median(cam_gps_lat_sum) 
             cam_gps_long = statistics.median(cam_gps_long_sum)
 
+
+            # cam_gps_lat = statistics.median(cam_gps_lat_sum) 
+            # cam_gps_long = statistics.median(cam_gps_long_sum)
+
+
+            print("last pos: ", (last_prediction_lat, last_prediction_lon))
+            print("cam gps: ", (cam_gps_lat, cam_gps_long))
             gps_dist_traveled = get_distance_metres(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon)
+
+            if gps_dist_traveled > 50:
+                continue
 
             print("distance traveled: ", gps_dist_traveled)
             total_dist_traveled += gps_dist_traveled
@@ -300,6 +287,9 @@ while cap.isOpened():
             matched_img = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
 
             # Show the matched image
+            print("output frame shape ", matched_img.shape[1], matched_img.shape[0]  )
+            # matched_img = cv2.cvtColor(matched_img, cv2.COLOR_GRAY2BGR)
+
             vid_matches.write(matched_img)
             last_prediction_lat = cam_gps_lat
             last_prediction_lon = cam_gps_long
@@ -309,7 +299,15 @@ while cap.isOpened():
             # Press 'q' to quit the video
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-print(total_dist_traveled)
+
+
+print("______________________________________________________")
+print("initial_pos: ", initial_pos)
+print("final coordinates: ", (cam_gps_lat, cam_gps_long))
+print("total distance: ",  total_dist_traveled)
+print("displacement: ", get_distance_metres(cam_gps_lat, cam_gps_long, initial_pos[0], initial_pos[1]))
+print("______________________________________________________")
+
 # Release the video capture and close the window
 vid_matches.release()
 cap.release()
