@@ -13,7 +13,8 @@ from operator import itemgetter
 
 still_image_dict = {
     0:('37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
-    1:('pair1.png', 37.872312, 122.319072, 170.3, 318), 
+    # 1:('pair1.png', 37.872312, 122.319072, 170.3, 318), 
+    1:('pair2.png', 37.8722765, 122.3193286, 279.09, 318), 
     2:('37.874496H_122.322454W_242.73H_297.8W.png', 37.874496, 122.322454, 242.73, 297.8), 
     3:('37.874496N_122.319072W_242.73H_364.08W.png', 37.874496, 122.319072, 242.73, 364.08)
 }
@@ -22,7 +23,7 @@ still_image_dict = {
 r_earth = 6378000
 
 # Video File
-video_path = "pair1.mp4"
+video_path = "pair2.mp4"
 cap = cv2.VideoCapture(video_path)
 ret, frame = cap.read()
 # print("frame", frame.shape[1])
@@ -31,9 +32,11 @@ ret, frame = cap.read()
 # TODO: Replace this part with google map video, fill out starting 
 # starting:  
 # ending: 
-drone_alt = 248
-last_prediction_lat = 37.872312
-last_prediction_lon = 122.319072
+drone_alt = 30
+# last_prediction_lat = 37.872312
+# last_prediction_lon = 122.319072
+last_prediction_lat = 37.8714191 #vehicle.home_location.lat
+last_prediction_lon = 122.3171289 # vehicle.home_location.lon
 # h_fov = 71.5
 # d_fov = 79.5
 cam_size = (frame.shape[1], frame.shape[0])
@@ -87,7 +90,7 @@ y_size = still_image_dict[1][3] / vertical_size
 print(y_size)
 
 # 2. Detect keypoints and descriptors in the still image using ORB
-orb = cv2.ORB_create(nfeatures=1000)
+orb = cv2.ORB_create(nfeatures=200)
 #kp_still, des_still = orb.detectAndCompute(still_image, None)
 kpts_still = orb.detect(still_image, None)
 desc = cv2.xfeatures2d.BEBLID_create(0.75)
@@ -101,7 +104,7 @@ index_params = dict(algorithm=6,  # FLANN_INDEX_LSH for ORB
                     table_number=6,  # number of hash tables
                     key_size=12,     # size of the hashed key
                     multi_probe_level=1)  # multi-probe level
-search_params = dict(checks=1000)  # number of checks (higher is more accurate)
+search_params = dict(checks=100)  # number of checks (higher is more accurate)
 
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 
@@ -132,7 +135,7 @@ while cap.isOpened():
             break
 
         # Drone vision edit
-        drone_alt = 248
+        drone_alt = 387
 
         # Convert the frame to grayscale
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -172,17 +175,37 @@ while cap.isOpened():
                         cv2.putText(still_kps, text=str(str((int(still_pt[0]), int(still_pt[1])))), org=(int(still_pt[0]), int(still_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                         cv2.putText(frame_kps, text=str((int(frame_pt[0]), int(frame_pt[1]))), org=(int(frame_pt[0]), int(frame_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                         good_matches.append(m[0])
-                        
+            
+            # print("good_matches: ", good_matches)
             dataset = pd.DataFrame(good_matches_xy)
             X = dataset.drop(columns=['frame_x_pt', 'frame_y_pt'])
             kmeans = KMeans(n_clusters=cluster_count, n_init=10)
             label = kmeans.fit_predict(X)
             dataset['cluster'] = kmeans.labels_
             count = Counter(kmeans.labels_)
-            print("count: ", count)
+            # print("count: ", count)
+            print("cam_x"+str(cam_x))
+            print("cam_y"+str(cam_y))
 
-            # print(sorted(count.items(), key=itemgetter(1), reverse=True))
+
+            plt.scatter(dataset['still_x_pt'], dataset['still_y_pt'], c=dataset['cluster'])
+            plt.legend()
+            plt.colorbar()
+            plt.show()
+
             count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
+            print("count list: ")
+            y = dataset[dataset['cluster'] ==  count_list[2][0]]
+            for row in y.itertuples():
+                cluster_matches.append(good_matches[row.Index])
+            matched_img_1 = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+
+            cv2.imshow("matches", matched_img_1)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            #print(good_matches_xy)
+            # print(sorted(count.items(), key=itemgetter(1), reverse=True))
+            # print(sorted(count.items(), key=itemgetter(1), reverse=True))
 
             # This finds the centroid of the image position and rotation
             centroid_gps_lat = 0
@@ -223,6 +246,13 @@ while cap.isOpened():
                     centroid_gps_long = median_gps_long_temp
                     centroid_cluster_idx = largest_cluster_idx
                     break
+            
+
+            matched_img_1 = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+
+            cv2.imshow("matches", matched_img_1)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
             if centroid_gps_lat == 0 or centroid_gps_long == 0:
                 print("couldnt find centroid")
                 continue
@@ -242,13 +272,13 @@ while cap.isOpened():
                 x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * (180 / math.pi)
                 x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
                 dist_to_centroid = get_distance_metres(x_lat, x_long, centroid_gps_lat, centroid_gps_long)
-                # print("distance to centroid: ", dist_to_centroid)
-                if dist_to_centroid < 100:
+                print("distance to centroid for ", row,  "  : ", dist_to_centroid)
+                if dist_to_centroid < 10:
                     still_gps_lat = x_lat
                     still_gps_long = x_long
-                    # print((x_lat, x_long))
-                    # print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size))
-                    # print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size))
+                    print("gps_coor", (x_lat, x_long))
+                    print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size))
+                    print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size))
                     best_match_idx = row.Index
                     cluster_matches.append(good_matches[row.Index])
                     cam_gps_lat = still_gps_lat - ((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi)
@@ -284,7 +314,7 @@ while cap.isOpened():
             last_prediction_lat = cam_gps_lat
             last_prediction_lon = cam_gps_long
 
-            print("hello")
+            # print("hello")
             cv2.imshow("matches", matched_img)
             # Press 'q' to quit the video
             if cv2.waitKey(1) & 0xFF == ord('q'):

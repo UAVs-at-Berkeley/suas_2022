@@ -83,15 +83,14 @@ cap = cv2.VideoCapture(video_path)
 
 cluster_count = 6
 ret, frame = cap.read()
-# fourcc = cv2.VideoWriter_fourcc(*"mp4v") 
-# fps     = cap.get(cv2.CAP_PROP_FPS) or 30       # fall back if camera gives 0
-# h, w    = frame.shape[:2]                       # size must stay constant
-# out     = cv2.VideoWriter("output.mp4", fourcc, fps, (w, h))
+fourcc = cv2.VideoWriter_fourcc(*"mp4v") 
+fps     = cap.get(cv2.CAP_PROP_FPS) or 30       # fall back if camera gives 0
+h, w    = frame.shape[:2]                       # size must stay constant
+out     = cv2.VideoWriter("output.mp4", fourcc, fps, (w, h))
 
 # 5. Process each frame of the video
 while cap.isOpened():
-    ret, frame = cap.read()
-    ret, frame = cap.read()
+    # for i in range(30):
     ret, frame = cap.read()
     if not ret:
         break
@@ -172,8 +171,8 @@ while cap.isOpened():
 
         # Show the matched image
         # cv2.imshow("Still image key points", still_kps)
-        cv2.imshow('Matches', matched_img)
-        # out.write(matched_img)
+        # cv2.imshow('Matches', matched_img)
+        out.write(matched_img)
 
     time.sleep(0.4)
 
@@ -183,5 +182,5 @@ while cap.isOpened():
 
 # Release the video capture and close the window
 cap.release()
-# out.release() 
+out.release() 
 cv2.destroyAllWindows()
