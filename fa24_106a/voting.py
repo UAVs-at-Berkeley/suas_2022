@@ -1,6 +1,7 @@
 import cv2
 import math
 import time
+import statistics
 
 import pandas as pd
 import numpy as np
@@ -14,7 +15,7 @@ from operator import itemgetter
 still_image_dict = {
     0:('37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
     # 1:('pair1.png', 37.872312, 122.319072, 170.3, 318), 
-    1:('pair2.png', 37.8722765, 122.3193286, 279.09, 330), 
+    1:('pair2.png', 37.8722765, 122.3193286, 279.09, 318), 
     2:('37.874496H_122.322454W_242.73H_297.8W.png', 37.874496, 122.322454, 242.73, 297.8), 
     3:('37.874496N_122.319072W_242.73H_364.08W.png', 37.874496, 122.319072, 242.73, 364.08)
 }
@@ -76,6 +77,34 @@ def get_distance_metres(lat1, lon1, lat2, lon2):
     dlong = lon2 - lon1
     return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
 
+def drawRectangles(img_gray, r, min_gap, white_thresh, drawing_img):
+    h, w = img_gray.shape
+    # convert to BGR so we can overwrite with white easily
+    out = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
+
+    # --- find all candidate (white) pixels -------------------------------------
+    ys, xs = np.where(img_gray >= white_thresh)
+    candidates = list(zip(xs, ys))          # (x, y) coordinates
+
+    # --- greedy placement of rectangles ---------------------------------------
+    centres: list[tuple[int, int]] = []     # accepted rectangle centres
+
+    for x, y in candidates:
+        # skip if too close to an existing rectangle
+        if any(math.hypot(x - cx, y - cy) < min_gap for cx, cy in centres):
+            continue
+
+        # clamp rectangle to stay inside image borders
+        tl = (max(0, x - r), max(0, y - r))          # top-left
+        br = (min(w - 1, x + r), min(h - 1, y + r))  # bottom-right
+
+        # cv2.rectangle(drawing_img, tl, br, color=(0, 0, 0), thickness=-1)
+        cv2.circle(drawing_img, tl, 2, color=(0, 0, 0), thickness=-1)
+        # cv2.circle(drawing_img, tl, 2, color=(255, 255, 255), thickness=-1)
+        centres.append((x, y))
+
+    return drawing_img
+
 
 # 1. Load the still image and the video
 still_image = cv2.imread(still_image_dict[1][0], cv2.IMREAD_GRAYSCALE)
@@ -90,8 +119,14 @@ y_size = still_image_dict[1][3] / vertical_size
 print(y_size)
 
 # 2. Detect keypoints and descriptors in the still image using ORB
-orb = cv2.ORB_create(nfeatures=200)
+orb = cv2.ORB_create(nfeatures=500)
 #kp_still, des_still = orb.detectAndCompute(still_image, None)
+
+# Image preprocess
+blurred = cv2.GaussianBlur(still_image, (5,5), 0)
+edges = cv2.Canny(blurred, 50, 200)
+mod_rec = drawRectangles(edges, 2, 20, 150, still_image)
+
 kpts_still = orb.detect(still_image, None)
 desc = cv2.xfeatures2d.BEBLID_create(0.75)
 kp_still, des_still = desc.compute(still_image, kpts_still)
@@ -127,10 +162,9 @@ while cap.isOpened():
     ret, frame = cap.read()
 
     ct += 1
-    #ret = cap.grab()
-    if (ct >= 20):
+    # starts every 20 frames
+    if (ct >= 15):
         ct = 0
-        # ret, frame = cap.read()
         if not ret:
             break
 
@@ -139,6 +173,11 @@ while cap.isOpened():
 
         # Convert the frame to grayscale
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Image preprocess
+        blurred = cv2.GaussianBlur(gray_frame, (5,5), 0)
+        edges = cv2.Canny(blurred, 50, 200)
+        mod_rec = drawRectangles(edges, 2, 20, 150, gray_frame)
 
         # 6. Detect keypoints and descriptors in the frame
         #kp_frame, des_frame = orb2.detectAndCompute(gray_frame, None)
@@ -164,9 +203,10 @@ while cap.isOpened():
             for m in matches:
                 if len(m) == 2:  # Ensure that we have two matches
                     # Apply Lowe's ratio test
-                    if m[0].distance < 0.95 * m[1].distance:
-                        still_pt = kp_still[m[0].queryIdx].pt
-                        frame_pt = kp_frame[m[0].trainIdx].pt
+                    if m[0].distance < 0.55 * m[1].distance:
+                        # Matched keypoints
+                        still_pt = kp_still[m[0].queryIdx].pt # point on the image
+                        frame_pt = kp_frame[m[0].trainIdx].pt # point on the video
                         
                         good_matches_xy['frame_x_pt'].append(frame_pt[0])
                         good_matches_xy['frame_y_pt'].append(frame_pt[1])
@@ -179,82 +219,23 @@ while cap.isOpened():
             
             # print("good_matches: ", good_matches)
             dataset = pd.DataFrame(good_matches_xy)
-            X = dataset.drop(columns=['frame_x_pt', 'frame_y_pt'])
+            # X = dataset.drop(columns=['frame_x_pt', 'frame_y_pt'])
 
 
+            # kmeans = KMeans(n_clusters=cluster_count, n_init=10)
+            # label = kmeans.fit_predict(X)
+            # dataset['cluster'] = kmeans.labels_
+            # count = Counter(kmeans.labels_)
 
 
-
-            kmeans = KMeans(n_clusters=cluster_count, n_init=10)
-            label = kmeans.fit_predict(X)
-            dataset['cluster'] = kmeans.labels_
-            count = Counter(kmeans.labels_)
-            # print("count: ", count)
-            print("cam_x"+str(cam_x))
-            print("cam_y"+str(cam_y))
-
-
-            # plt.scatter(dataset['still_x_pt'], dataset['still_y_pt'], c=dataset['cluster'])
-            # plt.legend()
-            # plt.colorbar()
-            # plt.show()
-
-            count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
-            # print("count list: ")
-            # for i in range(0, 6):
-            #     y = dataset[dataset['cluster'] ==  count_list[i][0]]
-            #     cluster_matches = []
-            #     for row in y.itertuples():
-            #         cluster_matches.append(good_matches[row.Index])
-            #     matched_img_1 = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, cluster_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-
-            #     cv2.imshow(f"matches {i}", matched_img_1)
-            #     if cv2.waitKey(1) & 0xFF == ord('q'):
-            #         break
-            #print(good_matches_xy)
-            # print(sorted(count.items(), key=itemgetter(1), reverse=True))
-            # print(sorted(count.items(), key=itemgetter(1), reverse=True))
+            # count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
 
             # This finds the centroid of the image position and rotation
             centroid_gps_lat = 0
             centroid_gps_long = 0
             centroid_cluster_idx = 0
-            medians = dataset.groupby('cluster').median()
             # print("medians: ", medians)
 
-            # TODO: The med_dist_to_last_pt is too big. Get a better initial estimation
-            # Extract good matches
-            for i in range(0, 4):
-                largest_cluster_idx = count_list[i][0]
-                print("largest cluster ", largest_cluster_idx)
-                max_centroid = kmeans.cluster_centers_[largest_cluster_idx]
-                max_median = (medians.at[largest_cluster_idx, 'still_x_pt'], medians.at[largest_cluster_idx, 'still_y_pt'])
-                
-                # print("max centroid ", max_centroid)
-                # print("max median ",max_median)
-                # print("still_image_dict", still_image_dict[1][1], " ", still_image_dict[1][2])
-                centroid_gps_lat_temp = still_image_dict[1][1] - (max_centroid[1]*y_size / r_earth) * (180 / math.pi)
-                centroid_gps_long_temp = still_image_dict[1][2] - ((max_centroid[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
-                
-                # print("still_image_dict", centroid_gps_lat_temp, " ", centroid_gps_long_temp)
-                # print("still_image_dict", last_prediction_lat, " ", last_prediction_lon)
-                
-                
-                dist_to_last_pt = get_distance_metres(centroid_gps_lat_temp, centroid_gps_long_temp, last_prediction_lat, last_prediction_lon)
-                # print(dist_to_last_pt)
-                median_gps_lat_temp = still_image_dict[1][1] - (max_median[1]*y_size / r_earth) * (180 / math.pi)
-                median_gps_long_temp = still_image_dict[1][2] - ((max_median[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
-                med_dist_to_last_pt = get_distance_metres(median_gps_lat_temp, median_gps_long_temp, last_prediction_lat, last_prediction_lon)
-
-                # print("dist", med_dist_to_last_pt)
-                if med_dist_to_last_pt < 300:
-                    # print("passed med_dist_to_last_point")
-                    print((centroid_gps_lat_temp, centroid_gps_long_temp))
-                    print((median_gps_lat_temp, median_gps_long_temp))
-                    centroid_gps_lat = median_gps_lat_temp
-                    centroid_gps_long = median_gps_long_temp
-                    centroid_cluster_idx = largest_cluster_idx
-                    break
             
 
             # matched_img_1 = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
@@ -262,41 +243,39 @@ while cap.isOpened():
             # cv2.imshow("matches", matched_img_1)
             # if cv2.waitKey(1) & 0xFF == ord('q'):
             #     break
-            if centroid_gps_lat == 0 or centroid_gps_long == 0:
-                print("couldnt find centroid")
-                continue
+            # if centroid_gps_lat == 0 or centroid_gps_long == 0:
+            #     print("couldnt find centroid")
+            #     continue
 
 
             cam_gps_long = 0
             cam_gps_lat = 0
 
-            y = dataset[dataset['cluster'] ==  count_list[centroid_cluster_idx][0]]
+            y = dataset
             best_match_idx = 0
             counter = 0
-            cam_gps_lat_sum = 0
-            cam_gps_long_sum = 0
+            cam_gps_lat_sum = []
+            cam_gps_long_sum = []
             cluster_matches = []
 
-            # take only the closest point to the centroid
-            for row in y.itertuples():
+            # Compare to the frame to the still image
+            for row in dataset.itertuples():
                 #print(row)
                 x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * (180 / math.pi)
                 x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
-                dist_to_centroid = get_distance_metres(x_lat, x_long, centroid_gps_lat, centroid_gps_long)
-                print("distance to centroid for ", row,  "  : ", dist_to_centroid)
-                if dist_to_centroid < 100:
-                    still_gps_lat = x_lat
-                    still_gps_long = x_long
-                    print("gps_coor", (x_lat, x_long))
-                    print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)) # move the coordinate to the top 
-                    print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)) # move the coordinate to the left
-                    best_match_idx = row.Index
-                    cluster_matches.append(good_matches[row.Index])
-                    cam_gps_lat = still_gps_lat - ((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi)
-                    cam_gps_long = still_gps_long + ((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
-                    cam_gps_lat_sum += cam_gps_lat
-                    cam_gps_long_sum += cam_gps_long
-                    counter+=1
+
+                still_gps_lat = x_lat
+                still_gps_long = x_long
+                # print("gps_coor", (x_lat, x_long))
+                # print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)) # move the coordinate to the top 
+                # print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)) # move the coordinate to the left
+                frame_y = (((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)
+                frame_x = (((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)
+                cam_gps_lat = still_gps_lat - (frame_y/ r_earth) * (180 / math.pi)
+                cam_gps_long = still_gps_long + (frame_x / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
+                cam_gps_lat_sum.append(cam_gps_lat)
+                cam_gps_long_sum.append(cam_gps_long) 
+                counter+=1
                     #break
             # TODO: The error is showing at the end
             if cam_gps_lat == 0 or cam_gps_long == 0:
@@ -307,18 +286,18 @@ while cap.isOpened():
             # Get the final and initial position from google maps
             # get the estimated position that results from the orb matching
 
-            # cam_gps_lat = cam_gps_lat_sum / counter
-            # cam_gps_long = cam_gps_long_sum / counter
+            cam_gps_lat = statistics.median(cam_gps_lat_sum) 
+            cam_gps_long = statistics.median(cam_gps_long_sum)
 
             gps_dist_traveled = get_distance_metres(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon)
 
-            print(gps_dist_traveled)
+            print("distance traveled: ", gps_dist_traveled)
             total_dist_traveled += gps_dist_traveled
 
 
 
             # 9. Draw the matches
-            matched_img = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, cluster_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
+            matched_img = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
 
             # Show the matched image
             vid_matches.write(matched_img)
