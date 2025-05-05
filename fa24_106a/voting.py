@@ -15,7 +15,8 @@ from operator import itemgetter
 still_image_dict = {
     0:('37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
     # 1:('pair1.png', 37.872312, 122.319072, 170.3, 318), 
-    1:('pair2.png', 37.8722765, 122.3193286, 279.09, 318), 
+    # 1:('pair2.png', 37.8722765, 122.3193286, 279.09, 318), 
+    1:('pair3.png', 37.8714926, 122.3184300, 81.3, 160.08), 
 
     2:('37.874496H_122.322454W_242.73H_297.8W.png', 37.874496, 122.322454, 242.73, 297.8), 
     3:('37.874496N_122.319072W_242.73H_364.08W.png', 37.874496, 122.319072, 242.73, 364.08)
@@ -23,6 +24,7 @@ still_image_dict = {
 
 vid = ('still_vid.mp4', 37.8722765, 122.3193286, 223.73, 300)
 # vid = ('pair2.mp4', 37.8722765, 122.3193286, 279.09, 318)
+vid = ('pair3.mp4', 37.8714926, 122.3184300, 60, 117)
 
 r_earth = 6378000
 
@@ -273,8 +275,10 @@ while cap.isOpened():
                 #print(row)
                 # Moves the point down to where the match is to find the global coordinate of othe point
                 # print("original image print: ", (row.still_x_pt, row.still_y_pt))
+                # print("still_y coordinate: ", ((row.still_y_pt) *y_size / r_earth) * 180/math.pi)
+                # print("still_x coordinate: ", (((row.still_x_pt)*x_size / r_earth) * 180/math.pi / math.cos(still_image_dict[1][1]*math.pi/180)) )
                 x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * 180/math.pi
-                x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * 180/math.pi / math.cos(still_image_dict[1][1]*math.pi/180)) 
+                x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * 180/math.pi / math.cos(x_lat*math.pi/180)) 
                 x_lat_sum.append(x_lat)
                 x_long_sum.append(x_long)
                 x_still.append(row.still_x_pt)
@@ -283,14 +287,16 @@ while cap.isOpened():
 
                 assert frame.shape[0:2] == (cam_size[1], cam_size[0])
                 # move the origin coordinate to the top left
-                frame_y = (((row.frame_y_pt) - cam_size[1]/2))
-                frame_x = (((row.frame_x_pt) - cam_size[0]/2))
-                # frame_y = row.frame_y_pt
-                # frame_x = row.frame_x_pt
+                # frame_y = (((row.frame_y_pt) - cam_size[1]/2))
+                # frame_x = (((row.frame_x_pt) - cam_size[0]/2))
+
+                # the video has a coordinate point that is based off of the left corner
+                frame_y = row.frame_y_pt
+                frame_x = row.frame_x_pt
                 
-                #Detect the difference between the 2 frames
+                # Detect the difference between the 2 frames
                 cam_gps_lat = x_lat - (frame_y * frame_y_size/ r_earth) * 180/math.pi
-                cam_gps_long = x_long - (frame_x * frame_x_size / r_earth) * 180/math.pi / math.cos(x_lat*math.pi/180)
+                cam_gps_long = x_long - (frame_x * frame_x_size / r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)
                 cam_gps_lat_sum.append(cam_gps_lat)
                 cam_gps_long_sum.append(cam_gps_long) 
                 counter+=1
