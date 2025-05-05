@@ -14,41 +14,36 @@ from operator import itemgetter
 still_image_dict = {
     0:('37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
     # 1:('pair1.png', 37.872312, 122.319072, 170.3, 318), 
-    1:('pair2.png', 37.8722765, 122.3193286, 279.09, 330), 
+    1:('pair2.png', 37.8722765, 122.3193286, 279.09, 318), 
+
     2:('37.874496H_122.322454W_242.73H_297.8W.png', 37.874496, 122.322454, 242.73, 297.8), 
     3:('37.874496N_122.319072W_242.73H_364.08W.png', 37.874496, 122.319072, 242.73, 364.08)
 }
 
+vid = ('still_vid.mp4', 37.8722765, 122.3193286, 223.73, 300)
 
 r_earth = 6378000
 
 # Video File
-video_path = "pair2.mp4"
-cap = cv2.VideoCapture(video_path)
+# video_path = "pair2.mp4"
+cap = cv2.VideoCapture(vid[0])
 ret, frame = cap.read()
 # print("frame", frame.shape[1])
-
 
 # TODO: Replace this part with google map video, fill out starting 
 # starting:  
 # ending: 
-drone_alt = 30
 # last_prediction_lat = 37.872312
 # last_prediction_lon = 122.319072
-last_prediction_lat = 37.8714191 #vehicle.home_location.lat
-last_prediction_lon = 122.3171289 # vehicle.home_location.lon
-# h_fov = 71.5
-# d_fov = 79.5
+initial_pos = (37.87161441993102, 122.31752593436721)
+last_prediction_lat = initial_pos[0] #vehicle.home_location.lat
+last_prediction_lon = initial_pos[1] # vehicle.home_location.lon
 cam_size = (frame.shape[1], frame.shape[0])
-droner_lat = 0
-droner_lon = 0
 
-cam_x = 318
-cam_y = 170.3
 # print(cam_y)
-cam_x_size = cam_x / cam_size[0]
+cam_x_size = vid[4] / cam_size[0]
 # print(cam_x_size)
-cam_y_size = cam_y / cam_size[1]
+cam_y_size = vid[3] / cam_size[1]
 # print(cam_y_size)
 
 
@@ -90,7 +85,7 @@ y_size = still_image_dict[1][3] / vertical_size
 print(y_size)
 
 # 2. Detect keypoints and descriptors in the still image using ORB
-orb = cv2.ORB_create(nfeatures=200)
+orb = cv2.ORB_create(nfeatures=600)
 #kp_still, des_still = orb.detectAndCompute(still_image, None)
 kpts_still = orb.detect(still_image, None)
 desc = cv2.xfeatures2d.BEBLID_create(0.75)
@@ -134,8 +129,7 @@ while cap.isOpened():
         if not ret:
             break
 
-        # Drone vision edit
-        drone_alt = 387
+
 
         # Convert the frame to grayscale
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -164,7 +158,7 @@ while cap.isOpened():
             for m in matches:
                 if len(m) == 2:  # Ensure that we have two matches
                     # Apply Lowe's ratio test
-                    if m[0].distance < 0.95 * m[1].distance:
+                    if m[0].distance < 0.75 * m[1].distance:
                         still_pt = kp_still[m[0].queryIdx].pt
                         frame_pt = kp_frame[m[0].trainIdx].pt
                         
@@ -190,13 +184,33 @@ while cap.isOpened():
             dataset['cluster'] = kmeans.labels_
             count = Counter(kmeans.labels_)
             # print("count: ", count)
-            print("cam_x"+str(cam_x))
-            print("cam_y"+str(cam_y))
+            # print("cam_x"+str(cam_x))
+            # print("cam_y"+str(cam_y))
 
 
-            # plt.scatter(dataset['still_x_pt'], dataset['still_y_pt'], c=dataset['cluster'])
-            # plt.legend()
-            # plt.colorbar()
+            # scatter1 = plt.scatter(
+            #     dataset['still_x_pt'], dataset['still_y_pt'], 
+            #     c=dataset['cluster'], cmap='tab10', label='Still Image Matches', marker='o'
+            # )
+
+            # # Plot the frame keypoints with the same cluster-based colors but a different marker
+            # scatter2 = plt.scatter(
+            #     dataset['frame_x_pt'], dataset['frame_y_pt'], 
+            #     c=dataset['cluster'], cmap='Set3', label='Frame Matches', marker='x'
+            # )
+
+            # # Create a legend
+            # plt.legend(loc='upper right')
+
+            # # Optional: Add colorbar to reflect cluster info
+            # plt.colorbar(scatter1, label='Cluster ID (Still)')
+
+            # # Add axis labels and show
+            # plt.xlabel('X Coordinate')
+            # plt.ylabel('Y Coordinate')
+            # plt.title('Clustered Keypoint Matches: Still vs. Frame')
+            # plt.grid(True)
+            # plt.tight_layout()
             # plt.show()
 
             count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
@@ -211,7 +225,7 @@ while cap.isOpened():
             #     cv2.imshow(f"matches {i}", matched_img_1)
             #     if cv2.waitKey(1) & 0xFF == ord('q'):
             #         break
-            #print(good_matches_xy)
+            # print(good_matches_xy)
             # print(sorted(count.items(), key=itemgetter(1), reverse=True))
             # print(sorted(count.items(), key=itemgetter(1), reverse=True))
 
@@ -226,7 +240,7 @@ while cap.isOpened():
             # Extract good matches
             for i in range(0, 4):
                 largest_cluster_idx = count_list[i][0]
-                print("largest cluster ", largest_cluster_idx)
+                # print("largest cluster ", largest_cluster_idx)
                 max_centroid = kmeans.cluster_centers_[largest_cluster_idx]
                 max_median = (medians.at[largest_cluster_idx, 'still_x_pt'], medians.at[largest_cluster_idx, 'still_y_pt'])
                 
@@ -247,10 +261,10 @@ while cap.isOpened():
                 med_dist_to_last_pt = get_distance_metres(median_gps_lat_temp, median_gps_long_temp, last_prediction_lat, last_prediction_lon)
 
                 # print("dist", med_dist_to_last_pt)
-                if med_dist_to_last_pt < 300:
+                if med_dist_to_last_pt < 200:
                     # print("passed med_dist_to_last_point")
-                    print((centroid_gps_lat_temp, centroid_gps_long_temp))
-                    print((median_gps_lat_temp, median_gps_long_temp))
+                    # print((centroid_gps_lat_temp, centroid_gps_long_temp))
+                    # print((median_gps_lat_temp, median_gps_long_temp))
                     centroid_gps_lat = median_gps_lat_temp
                     centroid_gps_long = median_gps_long_temp
                     centroid_cluster_idx = largest_cluster_idx
@@ -270,7 +284,7 @@ while cap.isOpened():
             cam_gps_long = 0
             cam_gps_lat = 0
 
-            y = dataset[dataset['cluster'] ==  count_list[centroid_cluster_idx][0]]
+            y = dataset[dataset['cluster'] ==  count_list[2][0]]
             best_match_idx = 0
             counter = 0
             cam_gps_lat_sum = 0
@@ -283,17 +297,22 @@ while cap.isOpened():
                 x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * (180 / math.pi)
                 x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
                 dist_to_centroid = get_distance_metres(x_lat, x_long, centroid_gps_lat, centroid_gps_long)
-                print("distance to centroid for ", row,  "  : ", dist_to_centroid)
-                if dist_to_centroid < 100:
+                # print("distance to centroid for ", row,  "  : ", dist_to_centroid)
+                if dist_to_centroid < 10:
                     still_gps_lat = x_lat
                     still_gps_long = x_long
-                    print("gps_coor", (x_lat, x_long))
-                    print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)) # move the coordinate to the top 
-                    print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)) # move the coordinate to the left
+                    # print("gps_coor", (x_lat, x_long))
+                    # print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)) # move the coordinate to the top 
+                    # print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)) # move the coordinate to the left
+                    # move the origin coordinate to the top left
+                    frame_y = (((row.frame_y_pt) - cam_size[1]/2))
+                    frame_x = (((row.frame_x_pt) - cam_size[0]/2)) 
+                    frame_y = row.frame_y_pt
+                    frame_x = row.frame_x_pt
                     best_match_idx = row.Index
                     cluster_matches.append(good_matches[row.Index])
-                    cam_gps_lat = still_gps_lat - ((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size)/ r_earth) * (180 / math.pi)
-                    cam_gps_long = still_gps_long + ((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
+                    cam_gps_lat = still_gps_lat - ((frame_y*cam_y_size)/ r_earth) * (180 / math.pi)
+                    cam_gps_long = still_gps_long - ((frame_x*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
                     cam_gps_lat_sum += cam_gps_lat
                     cam_gps_long_sum += cam_gps_long
                     counter+=1
@@ -307,14 +326,18 @@ while cap.isOpened():
             # Get the final and initial position from google maps
             # get the estimated position that results from the orb matching
 
-            # cam_gps_lat = cam_gps_lat_sum / counter
-            # cam_gps_long = cam_gps_long_sum / counter
+            cam_gps_lat = cam_gps_lat_sum / counter
+            cam_gps_long = cam_gps_long_sum / counter
 
             gps_dist_traveled = get_distance_metres(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon)
 
-            print(gps_dist_traveled)
-            total_dist_traveled += gps_dist_traveled
+            # if gps_dist_traveled > 30:
+            #     continue
 
+            print("last pos: ", (last_prediction_lat, last_prediction_lon))
+            print("cam gps: ", (cam_gps_lat, cam_gps_long))
+            print("distance traveled: ", gps_dist_traveled)
+            total_dist_traveled += gps_dist_traveled
 
 
             # 9. Draw the matches
@@ -330,7 +353,12 @@ while cap.isOpened():
             # Press 'q' to quit the video
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-print(total_dist_traveled)
+print("______________________________________________________")
+print("initial_pos: ", initial_pos)
+print("final coordinates: ", (cam_gps_lat, cam_gps_long))
+print("total distance: ",  total_dist_traveled)
+print("displacement: ", get_distance_metres(cam_gps_lat, cam_gps_long, initial_pos[0], initial_pos[1]))
+print("______________________________________________________")
 # Release the video capture and close the window
 vid_matches.release()
 cap.release()
