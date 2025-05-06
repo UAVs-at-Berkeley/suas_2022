@@ -44,23 +44,31 @@ def drawRectangles(img_gray, r, min_gap, white_thresh, drawing_img):
 
 
 # 1. Load the still image and the video
-still_image = cv2.imread('overview.png', cv2.IMREAD_GRAYSCALE)
-still_image2 = cv2.imread('overview_1.png', cv2.IMREAD_GRAYSCALE)
+still_image = cv2.imread('dji_pic.png', cv2.IMREAD_GRAYSCALE)
+still_image2 = cv2.imread('dark_earth_2.png', cv2.IMREAD_GRAYSCALE)
 
 # Image preprocess
-blurred = cv2.GaussianBlur(still_image, (5,5), 0)
-edges = cv2.Canny(blurred, 50, 200)
-mod_rec = drawRectangles(edges, 2, 20, 150, still_image)
+# still_image = cv2.GaussianBlur(still_image, (13,13), 0)
+# edges = cv2.Canny(still_image, 50, 200)
+# mod_rec = drawRectangles(edges, 2, 20, 150, still_image)
+
+# # Adjust the brightness and contrast 
+# # Adjusts the brightness by adding 10 to each pixel value 
+# brightness = 50
+# # Adjusts the contrast by scaling the pixel values by 2.3 
+# contrast = 2.3  
+# still_image = cv2.addWeighted(still_image, contrast, np.zeros(still_image.shape, still_image.dtype), 0, brightness) 
+
 
 # Makes lane markings, building edges, and tree trunks stand out against the fields without blowing out highlights.
-clahe = cv2.createCLAHE(clipLimit=0.5, tileGridSize=(8,8)) 
-still_image = clahe.apply(still_image)
+# clahe = cv2.createCLAHE(clipLimit=0.75, tileGridSize=(8,8)) 
+# still_image = clahe.apply(still_image)
 
 
 # Image preprocess 2
-blurred_2 = cv2.GaussianBlur(still_image2, (5,5), 0)
-edges_2 = cv2.Canny(blurred_2, 50, 200)
-mod_rec_2 = drawRectangles(edges_2, 2, 20, 150, still_image2)
+# blurred_2 = cv2.GaussianBlur(still_image2, (5,5), 0)
+# edges_2 = cv2.Canny(blurred_2, 50, 200)
+# mod_rec_2 = drawRectangles(edges_2, 2, 20, 150, still_image2)
 
 # still_image2 = clahe.apply(still_image2)
 
@@ -76,7 +84,7 @@ orb = cv2.ORB_create(   nfeatures      = 300,    # more keypoints
 # 6. Detect keypoints and descriptors in the frame
 
 kpts_still = orb.detect(still_image, None)
-desc = cv2.xfeatures2d.BEBLID_create(5)
+desc = cv2.xfeatures2d.BEBLID_create(0.75)
 kp_still, des_still = desc.compute(still_image, kpts_still)
 
 kpts_frame = orb.detect(still_image2, None)
@@ -93,10 +101,6 @@ search_params = dict(checks=1000)  # number of checks (higher is more accurate)
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 
 # 4. Open the video file
-
-
-
-cluster_count = 6
 
 
 
@@ -117,7 +121,7 @@ if des_frame is not None:
     for m in matches:
         if len(m) == 2:  # Ensure that we have two matches
             # Apply Lowe's ratio test
-            if m[0].distance < 0.35 * m[1].distance:
+            if m[0].distance < 0.55 * m[1].distance:
                 still_pt = kp_still[m[0].queryIdx].pt
                 frame_pt = kp_frame[m[0].trainIdx].pt
                 good_matches.append(m[0])
@@ -129,28 +133,7 @@ if des_frame is not None:
                 #good_matches_xy = np.vstack((good_matches_xy, add))
                 # cv2.putText(still_kps, text=str(str((int(still_pt[0]), int(still_pt[1])))), org=(int(still_pt[0]), int(still_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
     dataset = pd.DataFrame(good_matches_xy)
-    # print(dataset.head())
-    X = dataset.drop(columns=['frame_x_pt', 'frame_y_pt'])
-    # print(X.head())
-    #good_matches_xy = np.delete(good_matches_xy, 0, 0)
-    # print(good_matches_xy.shape)
-    kmeans = KMeans(n_clusters=cluster_count, n_init=10)
-    label = kmeans.fit_predict(X)
-    dataset['cluster'] = kmeans.labels_
-    
-    # print(X.head())
-    count = Counter(kmeans.labels_)
-    # print(count)
-    count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
-
-
-
-    
-    largest_cluster_idx = count_list[0][0]
-    # print(largest_cluster_idx)
-    max_centroid = kmeans.cluster_centers_[largest_cluster_idx]
-    # print(max_centroid)
-    y = dataset[dataset['cluster'] == largest_cluster_idx]
+    print(good_matches)
 
     # for row in y.itertuples():
     #     print(row)
