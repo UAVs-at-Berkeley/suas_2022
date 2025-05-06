@@ -72,6 +72,12 @@ def get_distance_metres(lat1, lon1, lat2, lon2):
     return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
 
 
+def get_vector_metres(lat1, lon1, lat2, lon2):
+    dlat = lat2 - lat1
+    dlong = lon2 - lon1
+    return dlat * 1.113195e5, dlong * 1.113195e5
+
+
 # 1. Load the still image and the video
 still_image = cv2.imread(still_image_dict[1][0], cv2.IMREAD_GRAYSCALE)
 # video_path = 'google_movie.mp4'
@@ -311,8 +317,8 @@ while cap.isOpened():
                     frame_x = row.frame_x_pt
                     best_match_idx = row.Index
                     cluster_matches.append(good_matches[row.Index])
-                    cam_gps_lat = still_gps_lat - ((frame_y*cam_y_size)/ r_earth) * (180 / math.pi)
-                    cam_gps_long = still_gps_long - ((frame_x*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
+                    cam_gps_lat = still_gps_lat + ((frame_y*cam_y_size)/ r_earth) * (180 / math.pi)
+                    cam_gps_long = still_gps_long + ((frame_x*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
                     cam_gps_lat_sum += cam_gps_lat
                     cam_gps_long_sum += cam_gps_long
                     counter+=1
@@ -348,8 +354,26 @@ while cap.isOpened():
             last_prediction_lat = cam_gps_lat
             last_prediction_lon = cam_gps_long
 
+
+
+            still_copy = still_image.copy()
+
+            y, x = get_vector_metres(still_image_dict[1][3], still_image_dict[1][4], cam_gps_lat, cam_gps_long)
+            point_y = (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth + cam_size[1]/2
+            point_x = - (still_image_dict[1][2] - cam_gps_long) * math.pi / 180 * math.cos(still_image_dict[1][1]*math.pi/180) * r_earth / x_size + cam_size[0]/2
+            print("pic drawing: ", (point_x, point_y))
+            print("Size: ",  still_copy.shape)
+
+            cv2.circle(still_copy, (int(point_y), int(point_x)) , radius=4, color=(255, 255, 255), thickness=-1)  # Red dot
+            
+
             # print("hello")
-            cv2.imshow("matches", matched_img)
+            # cv2.imshow("matches", matched_img)
+            cv2.imshow("point", still_copy)
+
+
+            # print("hello")
+            # cv2.imshow("matches", matched_img)
             # Press 'q' to quit the video
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break

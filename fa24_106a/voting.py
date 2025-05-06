@@ -23,7 +23,7 @@ still_image_dict = {
 }
 
 vid = ('still_vid.mp4', 37.8722765, 122.3193286, 223.73, 300)
-vid = ('pair2.mp4', 37.8722765, 122.3193286, 279.09, 318)
+# vid = ('pair2.mp4', 37.8722765, 122.3193286, 279.09, 318)
 # vid = ('pair3.mp4', 37.8714926, 122.3184300, 60, 117)
 
 r_earth = 6378000
@@ -298,10 +298,9 @@ while cap.isOpened():
                 cam_gps_lat = x_lat - (frame_y * frame_y_size/ r_earth) * 180/math.pi
                 cam_gps_long = x_long - (frame_x * frame_x_size / r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)
                 
-                cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size + frame_y * frame_y_size) / r_earth) * 180/math.pi
-                cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size +  frame_x * frame_x_size )/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
+                cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size - frame_y * frame_y_size) / r_earth) * 180/math.pi
+                cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size -  frame_x * frame_x_size )/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
 
-                
                 cam_gps_lat_sum.append(cam_gps_lat)
                 cam_gps_long_sum.append(cam_gps_long) 
                 counter+=1
@@ -372,9 +371,9 @@ while cap.isOpened():
             # plt.tight_layout()
             # plt.show()
 
-            if initial == 0:
-                initial_pos = (last_prediction_lat, last_prediction_lon)
-                initial += 1
+            # if initial == 0:
+            #     initial_pos = (last_prediction_lat, last_prediction_lon)
+            #     initial += 1
 
             gps_dist_traveled = get_distance_metres(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon)
 
@@ -406,18 +405,18 @@ while cap.isOpened():
 
             still_copy = still_image.copy()
 
-            # y, x = get_vector_metres(still_image_dict[1][3], still_image_dict[1][4], cam_gps_lat, cam_gps_long)
-            # point_y = (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth / y_size 
-            # point_x = (still_image_dict[1][2] - cam_gps_long) * math.pi / 180 * math.cos(still_image_dict[1][1]*math.pi/180) * r_earth / x_size
-            # print("pic drawing: ", (point_x, point_y))
-            # print("Size: ",  still_copy.shape)
+            y, x = get_vector_metres(still_image_dict[1][3], still_image_dict[1][4], cam_gps_lat, cam_gps_long)
+            point_y = (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth + cam_size[1]/2
+            point_x = - (still_image_dict[1][2] - cam_gps_long) * math.pi / 180 * math.cos(still_image_dict[1][1]*math.pi/180) * r_earth / x_size + cam_size[0]/2
+            print("pic drawing: ", (point_x, point_y))
+            print("Size: ",  still_copy.shape)
 
-            # cv2.circle(still_copy, (int(point_y), int(point_x)) , radius=4, color=(0, 0, 255), thickness=-1)  # Red dot
+            cv2.circle(still_copy, (int(point_y), int(point_x)) , radius=4, color=(255, 255, 255), thickness=-1)  # Red dot
             
 
             # print("hello")
             # cv2.imshow("matches", matched_img)
-            # cv2.imshow("point", still_copy)
+            cv2.imshow("point", still_copy)
             # Press 'q' to quit the video
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
