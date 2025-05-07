@@ -23,7 +23,8 @@ still_image_dict = {
 }
 
 vid = ('still_vid.mp4', 37.8722765, 122.3193286, 223.73, 300)
-# vid = ('pair2.mp4', 37.8722765, 122.3193286, 279.09, 318)
+
+vid = ('pair2.mp4', 37.8722765, 122.3193286, 279.09, 318)
 # vid = ('pair3.mp4', 37.8714926, 122.3184300, 60, 117)
 
 r_earth = 6378000
@@ -189,7 +190,9 @@ cluster_count = 6
 total_dist_traveled = 0
 
 # TODO: Everytime the image changes, look at the output frame
-vid_matches = cv2.VideoWriter('vid_matches.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 20, (2084 , 975))
+# vid_matches = cv2.VideoWriter('vid_matches.avi', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(horizontal_size+cap.get(3)), int(max([vertical_size, cap.get(4)]))))
+# vid_matches = cv2.VideoWriter('vid_matches.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 20, (2084 , 975)) # for the still video
+vid_matches = cv2.VideoWriter('vid_matches.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 20, (cam_size[1] , cam_size[0])) # for the still video
 ct = 0
 initial = 0
 # 5. Process each frame of the video
@@ -198,7 +201,7 @@ while cap.isOpened():
 
     ct += 1
     # starts every 20 frames
-    if (ct >= 5):
+    if (ct >= 10):
         ct = 0
         if not ret:
             break
@@ -287,8 +290,8 @@ while cap.isOpened():
 
                 assert frame.shape[0:2] == (cam_size[1], cam_size[0])
                 # move the origin coordinate to the top left
-                # frame_y = (((row.frame_y_pt) - cam_size[1]/2))
-                # frame_x = (((row.frame_x_pt) - cam_size[0]/2))
+                frame_y = (((row.frame_y_pt) - cam_size[1]/2))
+                frame_x = (((row.frame_x_pt) - cam_size[0]/2))
 
                 # the video has a coordinate point that is based off of the left corner
                 frame_y = row.frame_y_pt
@@ -296,7 +299,7 @@ while cap.isOpened():
                 
                 # Detect the difference between the 2 frames
                 cam_gps_lat = x_lat - (frame_y * frame_y_size/ r_earth) * 180/math.pi
-                cam_gps_long = x_long - (frame_x * frame_x_size / r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)
+                cam_gps_long = x_long + (frame_x * frame_x_size / r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)
                 
                 cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size - frame_y * frame_y_size) / r_earth) * 180/math.pi
                 cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size -  frame_x * frame_x_size )/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
@@ -399,15 +402,14 @@ while cap.isOpened():
             # print("output frame shape ", matched_img.shape[1], matched_img.shape[0]  )
             # matched_img = cv2.cvtColor(matched_img, cv2.COLOR_GRAY2BGR)
 
-            vid_matches.write(matched_img)
             last_prediction_lat = cam_gps_lat
             last_prediction_lon = cam_gps_long
 
             still_copy = still_image.copy()
 
             y, x = get_vector_metres(still_image_dict[1][3], still_image_dict[1][4], cam_gps_lat, cam_gps_long)
-            point_y = (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth + cam_size[1]/2
-            point_x = - (still_image_dict[1][2] - cam_gps_long) * math.pi / 180 * math.cos(still_image_dict[1][1]*math.pi/180) * r_earth / x_size + cam_size[0]/2
+            point_y = -1 * (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth/y_size + cam_size[1]/2
+            point_x = (still_image_dict[1][2] -cam_gps_long ) * math.pi / 180 * math.cos(still_image_dict[1][1]*math.pi/180) * r_earth / x_size + cam_size[0]/2
             print("pic drawing: ", (point_x, point_y))
             print("Size: ",  still_copy.shape)
 
@@ -416,6 +418,7 @@ while cap.isOpened():
 
             # print("hello")
             # cv2.imshow("matches", matched_img)
+            vid_matches.write(still_copy)
             cv2.imshow("point", still_copy)
             # Press 'q' to quit the video
             if cv2.waitKey(1) & 0xFF == ord('q'):

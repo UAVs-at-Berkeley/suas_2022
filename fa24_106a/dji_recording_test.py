@@ -1,7 +1,7 @@
 import cv2
 import math
 import time
-
+import statistics
 import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
@@ -10,10 +10,11 @@ import matplotlib.pyplot as plt
 from collections import Counter
 from operator import itemgetter
 
+
 still_image_dict = {
     0:('37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
     # 1:('37.872312N_122.319072W_235.56H_364.08W.png', 37.872312, 122.319072, 235.56, 364.08), 
-    1:('dji_pic.png', 37.872312, 122.319072, 235.56, 364.08), 
+    1:('dji_pic.png', 37.8719660, 122.3186288, 102, 150), 
     2:('37.874496H_122.322454W_242.73H_297.8W.png', 37.874496, 122.322454, 242.73, 297.8), 
     3:('37.874496N_122.319072W_242.73H_364.08W.png', 37.874496, 122.319072, 242.73, 364.08)
 }
@@ -28,8 +29,6 @@ last_prediction_lon = drone_lon
 h_fov = 71.5
 d_fov = 79.5
 cam_size = (1920, 1080)
-droner_lat = 0
-droner_lon = 0
 cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
 print(cam_x)
 cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
@@ -45,6 +44,10 @@ print(cam_y_size)
 
 
 
+def get_vector_metres(lat1, lon1, lat2, lon2):
+    dlat = lat2 - lat1
+    dlong = lon2 - lon1
+    return dlat * 1.113195e5, dlong * 1.113195e5
 
 
 def get_location_metres(original_location, dNorth, dEast):
@@ -112,7 +115,7 @@ y_size = still_image_dict[1][3] / vertical_size
 print(y_size)
 
 # 2. Detect keypoints and descriptors in the still image using ORB
-orb = cv2.ORB_create(nfeatures=250)
+orb = cv2.ORB_create(nfeatures=500)
 #kp_still, des_still = orb.detectAndCompute(still_image, None)
 kpts_still = orb.detect(still_image, None)
 desc = cv2.xfeatures2d.BEBLID_create(0.75)
@@ -150,7 +153,7 @@ while cap.isOpened():
 
     ct += 1
     #ret = cap.grab()
-    if (ct >= 5):
+    if (ct >= 10):
         ct = 0
         #ret, frame = cap.read()
         if not ret:
@@ -178,6 +181,7 @@ while cap.isOpened():
 
             # 8. Apply the ratio test to filter matches (Lowe's ratio test)
             good_matches = []
+            good_angles = []
             good_matches_xy = {
                 'still_x_pt':[],
                 'still_y_pt':[],
@@ -188,7 +192,7 @@ while cap.isOpened():
             for m in matches:
                 if len(m) == 2:  # Ensure that we have two matches
                     # Apply Lowe's ratio test
-                    if m[0].distance < 0.95 * m[1].distance:
+                    if m[0].distance < 0.65 * m[1].distance:
                         #print(m[0].queryIdx)
                         #print(m[1].queryIdx)
                         #print(m[0].trainIdx)
@@ -208,14 +212,102 @@ while cap.isOpened():
                         cv2.putText(still_kps, text=str(str((int(still_pt[0]), int(still_pt[1])))), org=(int(still_pt[0]), int(still_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                         cv2.putText(frame_kps, text=str((int(frame_pt[0]), int(frame_pt[1]))), org=(int(frame_pt[0]), int(frame_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                         good_matches.append(m[0])
-                        
+                        M, inliers = cv2.estimateAffinePartial2D(still_pt, frame_pt)
+                        if M is not None:
+                            angle_rad = np.arctan2(M[1, 0], M[0, 0])
+                            good_angles.append(angle_rad)
+                                                
             dataset = pd.DataFrame(good_matches_xy)
            
+            # print("matches: ", good_matches)
+
+            cam_gps_long = 0
+            cam_gps_lat = 0
+
+            y = dataset
+            best_match_idx = 0
+            counter = 0
+            cam_gps_lat_sum = []
+            cam_gps_long_sum = []
+            cluster_matches = []
+            x_lat_sum = []
+            x_long_sum = []
+            x_still = []
+            y_still = []
+
+            # Compare to the frame to the still image
+            print("dataset: ", dataset)
+            for row in dataset.itertuples():
+
+                # Detect Angles
+                x_angles = good_angles[row.index]
+
+
+                #print(row)
+                # Moves the point down to where the match is to find the global coordinate of othe point
+                # print("original image print: ", (row.still_x_pt, row.still_y_pt))
+                x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * 180/math.pi
+                x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * 180/math.pi / math.cos(still_image_dict[1][1]*math.pi/180)) 
+
+                assert frame.shape[0:2] == (cam_size[1], cam_size[0])
+                # move the origin coordinate to the top left
+                # the video has a coordinate point that is based off of the left corner
+                
+                # Detect the difference between the 2 frames
+                cam_gps_lat = x_lat + ((((row.frame_y_pt))*cam_y_size)/ r_earth) * (180 / math.pi)
+                cam_gps_long = x_long + (((row.frame_x_pt)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(x_lat*math.pi/180)
+                
+                # cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi
+                # cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size + ((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
 
 
 
+                cam_gps_lat_sum.append(cam_gps_lat)
+                cam_gps_long_sum.append(cam_gps_long) 
+                counter+=1
+                    #break
+            # TODO: The error is showing at the end
 
 
+            # median
+            # print("lat, long: ", (cam_gps_lat_sum, cam_gps_long_sum))
+
+            cam_gps_lat = statistics.median(cam_gps_lat_sum) 
+            cam_gps_long = statistics.median(cam_gps_long_sum)
+            
+            # cam_gps_lat = statistics.mean(cam_gps_lat_sum) 
+            # cam_gps_long = statistics.mean(cam_gps_long_sum)
+
+            gps_dist_traveled = get_distance_metres(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon)
+
+            # print("difference in coordinates", difference_coor(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon))
+            # print(np.array(x).dtype)  # for NumPy arrays
+
+            # if gps_dist_traveled > 100:
+            #     continue
+
+            print("last pos: ", (last_prediction_lat, last_prediction_lon))
+            print("cam gps: ", (cam_gps_lat, cam_gps_long))
+            print("distance traveled: ", gps_dist_traveled)
+            total_dist_traveled += gps_dist_traveled
+
+
+
+            still_copy = still_image.copy()
+
+            y, x = get_vector_metres(still_image_dict[1][3], still_image_dict[1][4], cam_gps_lat, cam_gps_long)
+            point_y = -1 * (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth + cam_size[1]/2
+            point_x = (still_image_dict[1][2] - cam_gps_long) * math.pi / 180 * math.cos(point_y*math.pi/180) * r_earth / x_size + cam_size[0]/2
+            print("pic drawing: ", (point_x, point_y))
+            # print("Size: ",  still_copy.shape)
+
+            cv2.circle(still_copy, (int(point_y), int(point_x)) , radius=5, color=(255, 255, 255), thickness=-1)  # Red dot
+            
+
+            # print("hello")
+            # cv2.imshow("matches", matched_img)
+            still_copy = cv2.resize(still_copy, (0,0), fx=0.5, fy=0.5) 
+            # cv2.imshow("point", still_copy)
 
 
 
@@ -223,6 +315,7 @@ while cap.isOpened():
             #print(good_matches[best_match_idx])
             #print(good_matches)
             matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
+            matched_img = cv2.resize(matched_img, (0,0), fx=0.5, fy=0.5) 
 
             # Show the matched image
             vid_matches.write(matched_img)
