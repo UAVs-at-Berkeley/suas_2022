@@ -138,7 +138,7 @@ def camera_control():
             if show_stream:
                 ret, frame = cap.read()
                 rtmp.setFrame(frame)
-            await asyncio.sleep(0)
+            time.sleep(0)
     except KeyboardInterrupt:
         if show_stream:
             rtmp.stop()
@@ -162,12 +162,17 @@ def camera_control():
 def yolo():
     for letter in 'abcdefghij':
         print(f"Letter: {letter}")
-        await asyncio.sleep(1)  # Non-blocking sleep
+        time.sleep(1)  # Non-blocking sleep
 
-drone = Thread(target=drone_control(), args=()).start()
-camera = Thread(target=camera_control(), args=()).start()
+drone = Thread(target=drone_control(), args=())
+camera = Thread(target=camera_control(), args=())
+
+drone.start()
+camera.start()
 
 while True:
     if not mission_term:
-        drone.stop()
-        camera.stop()
+        if drone.is_alive():
+            drone.join()
+        if camera.is_alive():
+            camera.join()

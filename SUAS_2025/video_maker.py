@@ -1,11 +1,11 @@
-from time import sleep
+import time
 from threading import Thread
 import cv2
 import os
 
 PATH_OF_SCRIPT = os.path.dirname(os.path.abspath(__file__)) #local directory, NOT the working directory
 RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
-FOURCC = cv2.VideoWriter_fourcc(*'H264')
+FOURCC = cv2.VideoWriter_fourcc(*'mp4v') #codes that work 'avc1', 'mp4v', 'MJPG'(only works with avi) 
 
 class VideoMaker:
     '''
@@ -23,13 +23,13 @@ class VideoMaker:
         frame_width = int(self.stream.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(self.stream.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = self.stream.get(cv2.CAP_PROP_FPS)
-        fourcc2 = self.stream.get(CAP_PROP_FOURCC)
+        fourcc2 = self.stream.get(cv2.CAP_PROP_FOURCC)
 
         i = 0
         while os.path.exists(f'{PATH_OF_SCRIPT}/video_{i}.avi'):
             i += 1
 
-        self.data = cv2.VideoWriter(f'{PATH_OF_SCRIPT}/video_{i}.avi', cv2.VideoWriter_fourcc(*'MJPG'), fps, (frame_width, frame_height))
+        self.data = cv2.VideoWriter(f'{PATH_OF_SCRIPT}/video_{i}.mp4', FOURCC, fps, (frame_width, frame_height)) # video formats that work '.mp4', '.avi'
 
     def recording_process(self):
         while self.recording_flag:

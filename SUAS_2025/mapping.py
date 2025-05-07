@@ -8,6 +8,9 @@ import cv2
 import image_capture_modified as imcap
 import RTMP
 from video_maker import VideoMaker
+import os
+
+PATH_OF_SCRIPT = os.path.dirname(os.path.abspath(__file__))
 
 #Given a 4-coordinate box, generates out equally spaced waypoint mission for photos to map area
 # Give coordinates in order: Northwest corner, Northeast Corner, Southeast Corner, Southwest Corner
@@ -284,9 +287,9 @@ try:
             waypoint = utils.getCurrentWaypoint(vehicle)
             #if streaming to rtmp, just save frame from earlier, otherwise capture and save
             if show_stream:
-                imcap.image_save(frame, coordinates = (waypoint.lat, waypoint.lon))
+                cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(waypoint.lat)}_{str(waypoint.lon)}.jpg', frame)
             else:
-                imcap.image_save(frame, coordinates = (waypoint.lat, waypoint.lon))
+                cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(waypoint.lat)}_{str(waypoint.lon)}.jpg', frame)
             
 
         print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
