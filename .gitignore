@@ -3,6 +3,7 @@
 *.MOV
 *.avi
 tests/
+targets/
 datasets/
 mannequins/
 yolov5
