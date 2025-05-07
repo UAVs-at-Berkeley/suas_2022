@@ -482,7 +482,7 @@ class VideoStitcher:
     
 if __name__ == "__main__":
     # Initialize video stitcher in debug mode
-    video_stitcher = VideoStitcher("C:/Users/isaac/Downloads/extrashort.mp4", "DEBUG", 5)
+    video_stitcher = VideoStitcher("C:/Users/isaac/Downloads/tiny.mp4", "DEBUG", -1)
     
     print("Starting video processing...")
     video_stitcher.start_processing()
