@@ -408,16 +408,16 @@ while cap.isOpened():
             still_copy = still_image.copy()
 
             y, x = get_vector_metres(still_image_dict[1][3], still_image_dict[1][4], cam_gps_lat, cam_gps_long)
-            point_y = -1 * (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth/y_size + cam_size[1]/2
+            point_y = (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth/y_size + cam_size[1]/2
             point_x = (still_image_dict[1][2] -cam_gps_long ) * math.pi / 180 * math.cos(still_image_dict[1][1]*math.pi/180) * r_earth / x_size + cam_size[0]/2
             print("pic drawing: ", (point_x, point_y))
             print("Size: ",  still_copy.shape)
 
-            cv2.circle(still_copy, (int(point_y), int(point_x)) , radius=4, color=(255, 255, 255), thickness=-1)  # Red dot
+            cv2.circle(still_copy, (int(point_x), int(point_y)) , radius=4, color=(255, 255, 255), thickness=-1)  # Red dot
             
 
             # print("hello")
-            # cv2.imshow("matches", matched_img)
+            cv2.imshow("matches", matched_img)
             vid_matches.write(still_copy)
             cv2.imshow("point", still_copy)
             # Press 'q' to quit the video

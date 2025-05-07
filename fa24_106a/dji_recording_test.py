@@ -201,8 +201,7 @@ while cap.isOpened():
                         #train_idx = 0#m.trainIdx 537,935
                         still_pt = kp_still[m[0].queryIdx].pt
                         frame_pt = kp_frame[m[0].trainIdx].pt
-                        #print(still_pt)
-                        #print(frame_pt)
+    
                         
                         good_matches_xy['frame_x_pt'].append(frame_pt[0])
                         good_matches_xy['frame_y_pt'].append(frame_pt[1])
@@ -212,10 +211,11 @@ while cap.isOpened():
                         cv2.putText(still_kps, text=str(str((int(still_pt[0]), int(still_pt[1])))), org=(int(still_pt[0]), int(still_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                         cv2.putText(frame_kps, text=str((int(frame_pt[0]), int(frame_pt[1]))), org=(int(frame_pt[0]), int(frame_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                         good_matches.append(m[0])
-                        M, inliers = cv2.estimateAffinePartial2D(still_pt, frame_pt)
-                        if M is not None:
-                            angle_rad = np.arctan2(M[1, 0], M[0, 0])
-                            good_angles.append(angle_rad)
+
+                        still_angle = kp_still[m[0].queryIdx].angle
+                        frame_angle = kp_frame[m[0].trainIdx].angle
+                        angle = frame_angle - still_angle
+                        good_angles.append(angle)
                                                 
             dataset = pd.DataFrame(good_matches_xy)
            
@@ -236,18 +236,40 @@ while cap.isOpened():
             y_still = []
 
             # Compare to the frame to the still image
-            print("dataset: ", dataset)
+            # print("dataset: ", dataset)
             for row in dataset.itertuples():
 
                 # Detect Angles
-                x_angles = good_angles[row.index]
+                # print("row index", row.Index)
+                x_angles = good_angles[row.Index] # in degrees
+                x_angles = x_angles * np.pi/180
+
+                rotation_matrix = np.array([
+                                    [np.cos(x_angles), -np.sin(x_angles)],
+                                    [np.sin(x_angles), np.cos(x_angles)]
+                                ])
 
 
                 #print(row)
-                # Moves the point down to where the match is to find the global coordinate of othe point
+                # Global Coordinates： take the position in the still frame, rotate it, then translate into gps
                 # print("original image print: ", (row.still_x_pt, row.still_y_pt))
-                x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * 180/math.pi
-                x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * 180/math.pi / math.cos(still_image_dict[1][1]*math.pi/180)) 
+                frame_y = row.frame_y_pt - cam_size[1]/2
+                frame_x = row.frame_x_pt - cam_size[0]/2
+
+                frame_y = row.frame_y_pt 
+                frame_x = row.frame_x_pt
+                rotated_coors = rotation_matrix @ np.array([frame_x, frame_y])
+                print("angles: ", x_angles)
+                print("stillx, stillk_y: ", (frame_x, frame_y))
+
+                print("rotated coordinates: ", rotated_coors)
+
+                x_lat = still_image_dict[1][1] - (rotated_coors[1]*y_size / r_earth) * 180/math.pi
+                x_long = still_image_dict[1][2] - ((rotated_coors[0]*x_size / r_earth) * 180/math.pi / math.cos(still_image_dict[1][1]*math.pi/180)) 
+
+                # Rotation
+                # put the center of the frame in terms of gps then rotation x_long and lat?
+
 
                 assert frame.shape[0:2] == (cam_size[1], cam_size[0])
                 # move the origin coordinate to the top left
@@ -259,8 +281,6 @@ while cap.isOpened():
                 
                 # cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi
                 # cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size + ((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
-
-
 
                 cam_gps_lat_sum.append(cam_gps_lat)
                 cam_gps_long_sum.append(cam_gps_long) 
@@ -307,7 +327,7 @@ while cap.isOpened():
             # print("hello")
             # cv2.imshow("matches", matched_img)
             still_copy = cv2.resize(still_copy, (0,0), fx=0.5, fy=0.5) 
-            # cv2.imshow("point", still_copy)
+            cv2.imshow("point", still_copy)
 
 
 
@@ -319,7 +339,7 @@ while cap.isOpened():
 
             # Show the matched image
             vid_matches.write(matched_img)
-            cv2.imshow("Matches", matched_img)
+            # cv2.imshow("Matches", matched_img)
             #print(cv2.getWindowImageRect("Matches"))
             #cv2.imshow("Still image key points", still_kps)
             #cv2.imshow("Frame image key points", frame_kps)
