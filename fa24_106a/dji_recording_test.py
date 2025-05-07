@@ -24,6 +24,9 @@ r_earth = 6378000
 drone_alt = 30
 drone_lat = 37.87119 #vehicle.home_location.lat
 drone_lon = 122.3176 # vehicle.home_location.lon
+# drone_lat = 37.8719660 #vehicle.home_location.lat
+# drone_lon = 122.3186288 # vehicle.home_location.lon
+
 last_prediction_lat = drone_lat
 last_prediction_lon = drone_lon
 h_fov = 71.5
@@ -50,33 +53,6 @@ def get_vector_metres(lat1, lon1, lat2, lon2):
     return dlat * 1.113195e5, dlong * 1.113195e5
 
 
-def get_location_metres(original_location, dNorth, dEast):
-    """
-    Returns a LocationGlobal object containing the latitude/longitude `dNorth` and `dEast` metres from the
-    specified `original_location`. The returned LocationGlobal has the same `alt` value
-    as `original_location`.
-
-    The function is useful when you want to move the vehicle around specifying locations relative to
-    the current vehicle position.
-
-    The algorithm is relatively accurate over small distances (10m within 1km) except close to the poles.
-    """
-    earth_radius=6378137.0 #Radius of "spherical" earth
-    #Coordinate offsets in radians
-    dLat = dNorth/earth_radius
-    dLon = dEast/(earth_radius*math.cos(math.pi*original_location.lat/180))
-
-    #New position in decimal degrees
-    newlat = original_location.lat + (dLat * 180/math.pi)
-    newlon = original_location.lon + (dLon * 180/math.pi)
-    if type(original_location) is LocationGlobal:
-        targetlocation=LocationGlobal(newlat, newlon,original_location.alt)
-    elif type(original_location) is LocationGlobalRelative:
-        targetlocation=LocationGlobalRelative(newlat, newlon,original_location.alt)
-    else:
-        raise Exception("Invalid Location object passed")
-
-    return targetlocation
 
 def get_distance_metres_pts(aLocation1, aLocation2):
     """
@@ -153,14 +129,14 @@ while cap.isOpened():
 
     ct += 1
     #ret = cap.grab()
-    if (ct >= 10):
+    if (ct >= 5):
         ct = 0
         #ret, frame = cap.read()
         if not ret:
             break
 
         cam_x = 2*(math.tan(h_fov*math.pi/2/180)*drone_alt)
-        print("camx: "+str(cam_x))
+        # print("camx: "+str(cam_x))
         cam_diag = 2*(math.tan(d_fov*math.pi/2/180)*drone_alt)
         half_cam_diag = cam_diag/2
         cam_y = math.sqrt(4*((math.tan(79.5*math.pi/2/180))**2)*(drone_alt**2)-(cam_x**2))
@@ -193,12 +169,6 @@ while cap.isOpened():
                 if len(m) == 2:  # Ensure that we have two matches
                     # Apply Lowe's ratio test
                     if m[0].distance < 0.65 * m[1].distance:
-                        #print(m[0].queryIdx)
-                        #print(m[1].queryIdx)
-                        #print(m[0].trainIdx)
-                        #print(m[1].trainIdx)
-                        #query_idx = 0#m.queryIdx
-                        #train_idx = 0#m.trainIdx 537,935
                         still_pt = kp_still[m[0].queryIdx].pt
                         frame_pt = kp_frame[m[0].trainIdx].pt
     
@@ -214,7 +184,7 @@ while cap.isOpened():
 
                         still_angle = kp_still[m[0].queryIdx].angle
                         frame_angle = kp_frame[m[0].trainIdx].angle
-                        angle = frame_angle - still_angle
+                        angle = still_angle - frame_angle
                         good_angles.append(angle)
                                                 
             dataset = pd.DataFrame(good_matches_xy)
@@ -229,61 +199,63 @@ while cap.isOpened():
             counter = 0
             cam_gps_lat_sum = []
             cam_gps_long_sum = []
-            cluster_matches = []
-            x_lat_sum = []
-            x_long_sum = []
-            x_still = []
-            y_still = []
+            angle_sum = []
+
+
 
             # Compare to the frame to the still image
             # print("dataset: ", dataset)
             for row in dataset.itertuples():
 
-                # Detect Angles
-                # print("row index", row.Index)
-                x_angles = good_angles[row.Index] # in degrees
-                x_angles = x_angles * np.pi/180
-
-                rotation_matrix = np.array([
-                                    [np.cos(x_angles), -np.sin(x_angles)],
-                                    [np.sin(x_angles), np.cos(x_angles)]
-                                ])
-
-
-                #print(row)
-                # Global Coordinates： take the position in the still frame, rotate it, then translate into gps
-                # print("original image print: ", (row.still_x_pt, row.still_y_pt))
-                frame_y = row.frame_y_pt - cam_size[1]/2
-                frame_x = row.frame_x_pt - cam_size[0]/2
-
-                frame_y = row.frame_y_pt 
-                frame_x = row.frame_x_pt
-                rotated_coors = rotation_matrix @ np.array([frame_x, frame_y])
-                print("angles: ", x_angles)
-                print("stillx, stillk_y: ", (frame_x, frame_y))
-
-                print("rotated coordinates: ", rotated_coors)
-
-                x_lat = still_image_dict[1][1] - (rotated_coors[1]*y_size / r_earth) * 180/math.pi
-                x_long = still_image_dict[1][2] - ((rotated_coors[0]*x_size / r_earth) * 180/math.pi / math.cos(still_image_dict[1][1]*math.pi/180)) 
-
-                # Rotation
-                # put the center of the frame in terms of gps then rotation x_long and lat?
+                # Global Coordinates of the still frame
+                x_lat = still_image_dict[1][1] - (row.still_y_pt*y_size / r_earth) * 180/math.pi
+                x_long = still_image_dict[1][2] - ((row.still_x_pt*x_size / r_earth) * 180/math.pi / math.cos(still_image_dict[1][1]*math.pi/180)) 
 
 
                 assert frame.shape[0:2] == (cam_size[1], cam_size[0])
                 # move the origin coordinate to the top left
                 # the video has a coordinate point that is based off of the left corner
-                
+
+                # frame_y = row.frame_y_pt - cam_size[1]/2
+                # frame_x = row.frame_x_pt - cam_size[0]/2
+
+                # local frame
+                frame_y = row.frame_y_pt 
+                frame_x = row.frame_x_pt
+
+                # finding angles and rotation
+                x_angles = good_angles[row.Index] # in degrees
+                x_angles = np.abs(x_angles * np.pi/180)
+                rotation_matrix = np.array([
+                                    [np.cos(x_angles), -np.sin(x_angles)],
+                                    [np.sin(x_angles), np.cos(x_angles)]
+                                ])
+                rotation_angles = np.array([frame_x-  cam_size[1]/2, frame_y -  cam_size[0]/2])
+                rotated_coors = rotation_matrix @ rotation_angles
+                frame_y = rotated_coors[1]
+                frame_x = rotated_coors[0]
+                print("angles: ", x_angles)
+                print("stillx, stillk_y: ", (frame_x, frame_y))
+                print("rotated coordinates: ", rotated_coors)
+
+
                 # Detect the difference between the 2 frames
-                cam_gps_lat = x_lat + ((((row.frame_y_pt))*cam_y_size)/ r_earth) * (180 / math.pi)
-                cam_gps_long = x_long + (((row.frame_x_pt)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(x_lat*math.pi/180)
+                cam_gps_lat = x_lat + ((((frame_y))*cam_y_size)/ r_earth) * (180 / math.pi)
+                cam_gps_long = x_long + (((frame_x)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(x_lat*math.pi/180)
                 
                 # cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi
                 # cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size + ((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
 
+
+                # cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi
+                # cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size + ((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
+
+
+                # print("x_coor change: ", ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi)
+
                 cam_gps_lat_sum.append(cam_gps_lat)
                 cam_gps_long_sum.append(cam_gps_long) 
+                angle_sum.append(x_angles)
                 counter+=1
                     #break
             # TODO: The error is showing at the end
@@ -294,6 +266,7 @@ while cap.isOpened():
 
             cam_gps_lat = statistics.median(cam_gps_lat_sum) 
             cam_gps_long = statistics.median(cam_gps_long_sum)
+            angle = statistics.median(angle_sum)
             
             # cam_gps_lat = statistics.mean(cam_gps_lat_sum) 
             # cam_gps_long = statistics.mean(cam_gps_long_sum)
@@ -306,29 +279,38 @@ while cap.isOpened():
             # if gps_dist_traveled > 100:
             #     continue
 
-            print("last pos: ", (last_prediction_lat, last_prediction_lon))
-            print("cam gps: ", (cam_gps_lat, cam_gps_long))
-            print("distance traveled: ", gps_dist_traveled)
+            # print("last pos: ", (last_prediction_lat, last_prediction_lon))
+            # print("cam gps: ", (cam_gps_lat, cam_gps_long))
+            # print("distance traveled: ", gps_dist_traveled)
             total_dist_traveled += gps_dist_traveled
 
+            last_prediction_lat = cam_gps_lat
+            last_prediction_lon = cam_gps_long
 
-
+            # Location that the drone thinks it is in
             still_copy = still_image.copy()
-
-            y, x = get_vector_metres(still_image_dict[1][3], still_image_dict[1][4], cam_gps_lat, cam_gps_long)
-            point_y = -1 * (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth + cam_size[1]/2
-            point_x = (still_image_dict[1][2] - cam_gps_long) * math.pi / 180 * math.cos(point_y*math.pi/180) * r_earth / x_size + cam_size[0]/2
+            y, x = get_vector_metres(still_image_dict[1][1], still_image_dict[1][2], cam_gps_lat, cam_gps_long)
+            point_y = (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth /y_size # + cam_size[1]/2
+            point_x = (still_image_dict[1][2] - cam_gps_long) * math.pi / 180 * math.cos(still_image_dict[1][1]*math.pi/180) * r_earth / x_size # + cam_size[0]/2
             print("pic drawing: ", (point_x, point_y))
             # print("Size: ",  still_copy.shape)
-
-            cv2.circle(still_copy, (int(point_y), int(point_x)) , radius=5, color=(255, 255, 255), thickness=-1)  # Red dot
-            
-
+            cv2.circle(still_copy, (int(point_x), int(point_y)) , radius=5, color=(255, 255, 255), thickness=-1)  # Red dot
             # print("hello")
             # cv2.imshow("matches", matched_img)
             still_copy = cv2.resize(still_copy, (0,0), fx=0.5, fy=0.5) 
             cv2.imshow("point", still_copy)
 
+            # Rotation Verification
+            img_copy = frame.copy()
+            (h, w) = img_copy.shape[:2]
+            center = (w / 2, h / 2)
+
+            # Get rotation matrix for the given angle
+            M = cv2.getRotationMatrix2D(center, np.abs(angle*180/np.pi) , 1.0)
+
+            # Perform the rotation
+            rotated = cv2.warpAffine(img_copy, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+            cv2.imshow("Rotated Point", rotated)
 
 
             # 9. Draw the matches
@@ -339,7 +321,7 @@ while cap.isOpened():
 
             # Show the matched image
             vid_matches.write(matched_img)
-            # cv2.imshow("Matches", matched_img)
+            cv2.imshow("Matches", matched_img)
             #print(cv2.getWindowImageRect("Matches"))
             #cv2.imshow("Still image key points", still_kps)
             #cv2.imshow("Frame image key points", frame_kps)

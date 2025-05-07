@@ -228,6 +228,8 @@ while cap.isOpened():
 
             # 8. Apply the ratio test to filter matches (Lowe's ratio test)
             good_matches = []
+            good_angles = []
+
             good_matches_xy = {
                 'still_x_pt':[],
                 'still_y_pt':[],
@@ -251,6 +253,10 @@ while cap.isOpened():
                         cv2.putText(still_kps, text=str(str((int(still_pt[0]), int(still_pt[1])))), org=(int(still_pt[0]), int(still_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                         cv2.putText(frame_kps, text=str((int(frame_pt[0]), int(frame_pt[1]))), org=(int(frame_pt[0]), int(frame_pt[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0), thickness=2, lineType=cv2.LINE_AA)
                         good_matches.append(m[0])
+                        still_angle = kp_still[m[0].queryIdx].angle
+                        frame_angle = kp_frame[m[0].trainIdx].angle
+                        angle = still_angle - frame_angle
+                        good_angles.append(angle)
             
             # print("good_matches: ", good_matches)
             dataset = pd.DataFrame(good_matches_xy)
@@ -296,13 +302,28 @@ while cap.isOpened():
                 # the video has a coordinate point that is based off of the left corner
                 frame_y = row.frame_y_pt
                 frame_x = row.frame_x_pt
+
+                # finding angles and rotation
+                x_angles = good_angles[row.Index] # in degrees
+                x_angles = x_angles * np.pi/180
+                rotation_matrix = np.array([
+                                    [np.cos(x_angles), -np.sin(x_angles)],
+                                    [np.sin(x_angles), np.cos(x_angles)]
+                                ])
+                rotation_angles = np.array([frame_x-  cam_size[1]/2, frame_y -  cam_size[0]/2])
+                rotated_coors = rotation_matrix @ rotation_angles
+                print("angles: ", x_angles)
+                print("stillx, stillk_y: ", (frame_x, frame_y))
+                print("rotated coordinates: ", rotated_coors)
+
+
                 
                 # Detect the difference between the 2 frames
-                cam_gps_lat = x_lat - (frame_y * frame_y_size/ r_earth) * 180/math.pi
+                cam_gps_lat = x_lat + (frame_y * frame_y_size/ r_earth) * 180/math.pi
                 cam_gps_long = x_long + (frame_x * frame_x_size / r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)
                 
-                cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size - frame_y * frame_y_size) / r_earth) * 180/math.pi
-                cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size -  frame_x * frame_x_size )/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
+                # cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size - frame_y * frame_y_size) / r_earth) * 180/math.pi
+                # cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size -  frame_x * frame_x_size )/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
 
                 cam_gps_lat_sum.append(cam_gps_lat)
                 cam_gps_long_sum.append(cam_gps_long) 
@@ -374,9 +395,9 @@ while cap.isOpened():
             # plt.tight_layout()
             # plt.show()
 
-            # if initial == 0:
-            #     initial_pos = (last_prediction_lat, last_prediction_lon)
-            #     initial += 1
+            if initial == 0:
+                initial_pos = (last_prediction_lat, last_prediction_lon)
+                initial += 1
 
             gps_dist_traveled = get_distance_metres(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon)
 
@@ -407,7 +428,7 @@ while cap.isOpened():
 
             still_copy = still_image.copy()
 
-            y, x = get_vector_metres(still_image_dict[1][3], still_image_dict[1][4], cam_gps_lat, cam_gps_long)
+            y, x = get_vector_metres(still_image_dict[1][1], still_image_dict[1][2], cam_gps_lat, cam_gps_long)
             point_y = (still_image_dict[1][1] - cam_gps_lat) *  math.pi / 180 * r_earth/y_size + cam_size[1]/2
             point_x = (still_image_dict[1][2] -cam_gps_long ) * math.pi / 180 * math.cos(still_image_dict[1][1]*math.pi/180) * r_earth / x_size + cam_size[0]/2
             print("pic drawing: ", (point_x, point_y))
