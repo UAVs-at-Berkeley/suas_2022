@@ -80,7 +80,7 @@ def get_distance_metres(lat1, lon1, lat2, lon2):
     return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
 
 def angle_bound(angle):
-    if angle < 0.1 or angle > 6.18:
+    if angle < 0.2 or angle > 6.08:
         return 0 # angle is negligible
     elif angle < 1:
         return 1 # angle is reasonable 
@@ -226,12 +226,12 @@ while cap.isOpened():
                 # move the origin coordinate to the top left
                 # the video has a coordinate point that is based off of the left corner
 
-                # frame_y = row.frame_y_pt - cam_size[1]/2
-                # frame_x = row.frame_x_pt - cam_size[0]/2
+                frame_y = row.frame_y_pt - cam_size[1]/2
+                frame_x = row.frame_x_pt - cam_size[0]/2
 
                 # local frame
-                frame_y = row.frame_y_pt 
-                frame_x = row.frame_x_pt
+                # frame_y = row.frame_y_pt 
+                # frame_x = row.frame_x_pt
 
                 # finding angles and rotation
                 x_angles = good_angles[row.Index] # in degrees
@@ -240,29 +240,26 @@ while cap.isOpened():
                                     [np.cos(x_angles), -np.sin(x_angles)],
                                     [np.sin(x_angles), np.cos(x_angles)]
                                 ])
-                rotation_angles = np.array([frame_x #- cam_size[1]/2
+                # put the coordinates relative to the center of the frame
+                rotation_angles = np.array([frame_x # - cam_size[1]/2
                                             , 
-                                            frame_y #- cam_size[0]/2
+                                            frame_y # - cam_size[0]/2
                                             ])
+                # Rotate
                 rotated_coors = rotation_matrix @ rotation_angles
-                frame_y = rotated_coors[1]
-                frame_x = rotated_coors[0]
+                # reestablish point in the corner
+                frame_y = rotated_coors[1]  # + cam_size[1]/2
+                frame_x = rotated_coors[0]  # + cam_size[0]/2
                 # print("angles: ", x_angles)
                 # print("stillx, stillk_y: ", (frame_x, frame_y))
                 # print("rotated coordinates: ", rotated_coors)
 
                 # Detect the difference between the 2 frames
                 cam_gps_lat = x_lat + ((((frame_y))*cam_y_size)/ r_earth) * (180 / math.pi)
-                cam_gps_long = x_long + (((frame_x)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(x_lat*math.pi/180)
+                cam_gps_long = x_long + (((frame_x)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(cam_gps_lat*math.pi/180)
                 
                 # cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi
                 # cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size + ((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
-
-
-                # cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi
-                # cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size + ((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
-
-
                 # print("x_coor change: ", ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi)
 
                 cam_gps_lat_sum.append(cam_gps_lat)
