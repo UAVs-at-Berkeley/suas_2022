@@ -44,13 +44,13 @@ def drawRectangles(img_gray, r, min_gap, white_thresh, drawing_img):
 
 
 # 1. Load the still image and the video
-still_image = cv2.imread('dji_pic.png', cv2.IMREAD_GRAYSCALE)
-still_image2 = cv2.imread('dark_earth_2.png', cv2.IMREAD_GRAYSCALE)
+still_image = cv2.imread('dji_screenshot.png', cv2.IMREAD_GRAYSCALE)
+still_image2 = cv2.imread('ref/earth7.png', cv2.IMREAD_GRAYSCALE)
 
 # Image preprocess
-# still_image = cv2.GaussianBlur(still_image, (13,13), 0)
-# edges = cv2.Canny(still_image, 50, 200)
-# mod_rec = drawRectangles(edges, 2, 20, 150, still_image)
+blur = cv2.GaussianBlur(still_image, (13,13), 0)
+edges = cv2.Canny(blur, 50, 200)
+mod_rec = drawRectangles(edges, 2, 20, 150, still_image)
 
 # # Adjust the brightness and contrast 
 # # Adjusts the brightness by adding 10 to each pixel value 
@@ -66,15 +66,15 @@ still_image2 = cv2.imread('dark_earth_2.png', cv2.IMREAD_GRAYSCALE)
 
 
 # Image preprocess 2
-# blurred_2 = cv2.GaussianBlur(still_image2, (5,5), 0)
-# edges_2 = cv2.Canny(blurred_2, 50, 200)
-# mod_rec_2 = drawRectangles(edges_2, 2, 20, 150, still_image2)
+blurred_2 = cv2.GaussianBlur(still_image2, (5,5), 0)
+edges_2 = cv2.Canny(blurred_2, 50, 200)
+mod_rec_2 = drawRectangles(edges_2, 2, 20, 150, still_image2)
 
 # still_image2 = clahe.apply(still_image2)
 
 
 # 2. Detect keypoints and descriptors in the still image using ORB
-orb = cv2.ORB_create(   nfeatures      = 300,    # more keypoints
+orb = cv2.ORB_create(   nfeatures      = 500,    # more keypoints
                         scaleFactor    = 1.2,     # finer image pyramid
                         nlevels        = 2,
                         edgeThreshold  = 20,      # detect closer to borders
@@ -86,9 +86,14 @@ orb = cv2.ORB_create(   nfeatures      = 300,    # more keypoints
 kpts_still = orb.detect(still_image, None)
 desc = cv2.xfeatures2d.BEBLID_create(0.75)
 kp_still, des_still = desc.compute(still_image, kpts_still)
+print(kp_still)
+still_kps = cv2.drawKeypoints(still_image, kp_still, None, color=(0,255,0), flags=0)
+
 
 kpts_frame = orb.detect(still_image2, None)
 kp_frame, des_frame = desc.compute(still_image2, kpts_frame)
+frame_kps = cv2.drawKeypoints(still_image2, kp_frame, None, color=(0,255,0), flags=0)
+print(kp_frame)
 
 
 # 3. Initialize the FLANN-based matcher
@@ -143,7 +148,7 @@ if des_frame is not None:
     # plt.colorbar()
     # plt.show()
     # 9. Draw the matches
-    matched_img = cv2.drawMatches(still_image, kp_still, still_image2, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    matched_img = cv2.drawMatches(still_kps, kp_still, frame_kps, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
     # Show the matched image
     # cv2.imshow("Still image key points", still_kps)

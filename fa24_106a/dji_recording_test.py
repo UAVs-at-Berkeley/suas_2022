@@ -9,6 +9,17 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from collections import Counter
 from operator import itemgetter
+from utils import *
+
+#######****************************************************************##########
+
+#######   This is the file that uses night time images of orb          ##########
+
+#######****************************************************************##########
+
+
+
+
 
 
 still_image_dict = {
@@ -48,49 +59,8 @@ print(cam_y_size)
 
 
 
-def get_vector_metres(lat1, lon1, lat2, lon2):
-    dlat = lat2 - lat1
-    dlong = lon2 - lon1
-    return dlat * 1.113195e5, dlong * 1.113195e5
-
-
-
-def get_distance_metres_pts(aLocation1, aLocation2):
-    """
-    Returns the ground distance in metres between two `LocationGlobal` or `LocationGlobalRelative` objects.
-
-    This method is an approximation, and will not be accurate over large distances and close to the
-    earth's poles. It comes from the ArduPilot test code:
-    https://github.com/diydrones/ardupilot/blob/master/Tools/autotest/common.py
-    """
-    dlat = aLocation2.lat - aLocation1.lat
-    dlong = aLocation2.lon - aLocation1.lon
-    return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
-
-def get_distance_metres(lat1, lon1, lat2, lon2):
-    """
-    Returns the ground distance in metres between two `LocationGlobal` or `LocationGlobalRelative` objects.
-
-    This method is an approximation, and will not be accurate over large distances and close to the
-    earth's poles. It comes from the ArduPilot test code:
-    https://github.com/diydrones/ardupilot/blob/master/Tools/autotest/common.py
-    """
-    dlat = lat2 - lat1
-    dlong = lon2 - lon1
-    return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
-
-def angle_bound(angle):
-    if angle < 0.2 or angle > 6.08:
-        return 0 # angle is negligible
-    elif angle < 1:
-        return 1 # angle is reasonable 
-    else:
-        return 2 #continue because the angle is an error
-    
-
 # 1. Load the still image and the video
 still_image = cv2.imread(still_image_dict[1][0], cv2.IMREAD_GRAYSCALE)
-video_path = 'dji_flight.MOV'
 horizontal_size = still_image.shape[:2][1]
 print(horizontal_size)
 vertical_size = still_image.shape[:2][0]
@@ -130,8 +100,10 @@ print(cap.get(4))
 
 cluster_count = 6
 total_dist_traveled = 0
-
-vid_matches = cv2.VideoWriter('vid_matches.avi', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(horizontal_size+cap.get(3)), int(max([vertical_size, cap.get(4)]))))
+# Video for the matching
+vid_matches = cv2.VideoWriter('vid_matches.mp4', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(horizontal_size+cap.get(3)), int(max([vertical_size, cap.get(4)]))))
+# video to plot the point on the still map
+vid_location = cv2.VideoWriter('vid_location.mp4', cv2.VideoWriter_fourcc(*'MJPG'), 20, (still_image.shape[1], still_image.shape[0]))
 ct = 0
 # 5. Process each frame of the video
 while cap.isOpened():
@@ -317,8 +289,11 @@ while cap.isOpened():
             cv2.circle(still_copy, (int(point_x), int(point_y)) , radius=5, color=(255, 255, 255), thickness=-1)  # Red dot
             # print("hello")
             # cv2.imshow("matches", matched_img)
-            still_copy = cv2.resize(still_copy, (0,0), fx=0.5, fy=0.5) 
-            cv2.imshow("point", still_copy)
+            # still_copy = cv2.resize(still_copy, (0,0), fx=0.5, fy=0.5) 
+            # cv2.imshow("point", still_copy)
+            if len(still_copy.shape) == 2:  # grayscale
+                still_copy = cv2.cvtColor(still_copy, cv2.COLOR_GRAY2BGR)
+            vid_location.write(still_copy)
             # //////////////////////////////////////////////////////////
 
 
@@ -340,11 +315,11 @@ while cap.isOpened():
             #print(good_matches[best_match_idx])
             #print(good_matches)
             matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
-            matched_img = cv2.resize(matched_img, (0,0), fx=0.5, fy=0.5) 
+            # matched_img = cv2.resize(matched_img, (0,0), fx=0.5, fy=0.5) 
 
             # Show the matched image
             vid_matches.write(matched_img)
-            cv2.imshow("Matches", matched_img)
+            # cv2.imshow("Matches", matched_img)
             #print(cv2.getWindowImageRect("Matches"))
             #cv2.imshow("Still image key points", still_kps)
             #cv2.imshow("Frame image key points", frame_kps)
@@ -356,5 +331,6 @@ while cap.isOpened():
 print(total_dist_traveled)
 # Release the video capture and close the window
 vid_matches.release()
+vid_location.release()
 cap.release()
 cv2.destroyAllWindows()

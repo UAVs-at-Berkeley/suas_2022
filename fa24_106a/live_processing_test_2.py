@@ -8,41 +8,15 @@ import matplotlib.pyplot as plt
 from collections import Counter
 from operator import itemgetter
 import math
+from utils import *
 
 
-def drawRectangles(img_gray, r, min_gap, white_thresh, drawing_img):
-    h, w = img_gray.shape
-    # convert to BGR so we can overwrite with white easily
-    out = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
-
-    # --- find all candidate (white) pixels -------------------------------------
-    ys, xs = np.where(img_gray >= white_thresh)
-    candidates = list(zip(xs, ys))          # (x, y) coordinates
-
-    # --- greedy placement of rectangles ---------------------------------------
-    centres: list[tuple[int, int]] = []     # accepted rectangle centres
-
-    for x, y in candidates:
-        # skip if too close to an existing rectangle
-        if any(math.hypot(x - cx, y - cy) < min_gap for cx, cy in centres):
-            continue
-
-        # clamp rectangle to stay inside image borders
-        tl = (max(0, x - r), max(0, y - r))          # top-left
-        br = (min(w - 1, x + r), min(h - 1, y + r))  # bottom-right
-
-        # cv2.rectangle(drawing_img, tl, br, color=(0, 0, 0), thickness=-1)
-        cv2.circle(drawing_img, tl, 2, color=(0, 0, 0), thickness=-1)
-        # cv2.circle(drawing_img, tl, 2, color=(255, 255, 255), thickness=-1)
-        centres.append((x, y))
-
-    return drawing_img
 
 # 1. Load the still image and the video
 # still_image = cv2.imread('pair2.png', cv2.IMREAD_GRAYSCALE)
 # video_path = 'pair2.mp4'
-still_image = cv2.imread('pair1.png', cv2.IMREAD_GRAYSCALE)
-video_path = 'pair1.mp4'
+still_image = cv2.imread('media/earth1.png', cv2.IMREAD_GRAYSCALE)
+video_path = 'DJI_20250507154925_0025_D.MP4'
 #video_path = 'lowaltflight.mp4'
 
 # earth_2 and vid_2 are pairs
@@ -53,7 +27,7 @@ edges = cv2.Canny(blurred, 50, 200)
 # mod_rec = drawRectangles(edges, 3, 20, 200, still_image)
 
 # 2. Detect keypoints and descriptors in the still image using ORB
-orb = cv2.ORB_create(nfeatures=450)
+orb = cv2.ORB_create(nfeatures=450, nlevels=30)
 #kp_still, des_still = orb.detectAndCompute(still_image, None)
 kpts_still = orb.detect(still_image, None)
 desc = cv2.xfeatures2d.BEBLID_create(1)
@@ -171,8 +145,10 @@ while cap.isOpened():
 
         # Show the matched image
         # cv2.imshow("Still image key points", still_kps)
-        # cv2.imshow('Matches', matched_img)
-        out.write(matched_img)
+        matched_img = cv2.resize(matched_img, (0,0), fx=0.5, fy=0.5) 
+
+        cv2.imshow('Matches', matched_img)
+        # out.write(matched_img)
 
     time.sleep(0.4)
 
