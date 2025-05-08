@@ -198,18 +198,59 @@ while cap.isOpened():
                         good_angles.append(angle)
                                                 
             dataset = pd.DataFrame(good_matches_xy)
-           
-            # print("matches: ", good_matches)
+            X = dataset.drop(columns=['frame_x_pt', 'frame_y_pt'])
+            kmeans = KMeans(n_clusters=cluster_count, n_init=10)
+            label = kmeans.fit_predict(X)
+            dataset['cluster'] = kmeans.labels_
+            count = Counter(kmeans.labels_)
+            print("cam_x"+str(cam_x))
+            print("cam_y"+str(cam_y))
+            #print(good_matches_xy)
+            print(sorted(count.items(), key=itemgetter(1), reverse=True))
+            count_list = sorted(count.items(), key=itemgetter(1), reverse=True)
+            centroid_gps_lat = 0
+            centroid_gps_long = 0
+            centroid_cluster_idx = 0
+            medians = dataset.groupby('cluster').median()
+            for i in range(0, 3):
+                largest_cluster_idx = count_list[i][0]
+                #print(largest_cluster_idx)
+                max_centroid = kmeans.cluster_centers_[largest_cluster_idx]
+                max_median = (medians.at[largest_cluster_idx, 'still_x_pt'], medians.at[largest_cluster_idx, 'still_y_pt'])
+                print(max_centroid)
+                print(max_median)
+                centroid_gps_lat_temp = still_image_dict[1][1] - (max_centroid[1]*y_size / r_earth) * (180 / math.pi)
+                centroid_gps_long_temp = still_image_dict[1][2] - ((max_centroid[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
+                dist_to_last_pt = get_distance_metres(centroid_gps_lat_temp, centroid_gps_long_temp, last_prediction_lat, last_prediction_lon)
+                print(dist_to_last_pt)
+                median_gps_lat_temp = still_image_dict[1][1] - (max_median[1]*y_size / r_earth) * (180 / math.pi)
+                median_gps_long_temp = still_image_dict[1][2] - ((max_median[0]*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
+                med_dist_to_last_pt = get_distance_metres(median_gps_lat_temp, median_gps_long_temp, last_prediction_lat, last_prediction_lon)
+                print(med_dist_to_last_pt)
+                if med_dist_to_last_pt < 50:
+                    print((centroid_gps_lat_temp, centroid_gps_long_temp))
+                    print((median_gps_lat_temp, median_gps_long_temp))
+                    centroid_gps_lat = median_gps_lat_temp
+                    centroid_gps_long = median_gps_long_temp
+                    centroid_cluster_idx = largest_cluster_idx
+                    break
+            if centroid_gps_lat == 0 or centroid_gps_long == 0:
+                continue
+
+
+
+
 
             cam_gps_long = 0
             cam_gps_lat = 0
 
-            y = dataset
+            y = dataset[dataset['cluster'] == largest_cluster_idx]
             best_match_idx = 0
             counter = 0
-            cam_gps_lat_sum = []
-            cam_gps_long_sum = []
-            angle_sum = []
+            cam_gps_lat_sum = 0
+            cam_gps_long_sum = 0
+            cluster_matches = []
+            angle_sum = 0
 
 
 
@@ -217,91 +258,68 @@ while cap.isOpened():
             # print("dataset: ", dataset)
             for row in dataset.itertuples():
 
-                # Global Coordinates of the still frame
-                x_lat = still_image_dict[1][1] - (row.still_y_pt*y_size / r_earth) * 180/math.pi
-                x_long = still_image_dict[1][2] - ((row.still_x_pt*x_size / r_earth) * 180/math.pi / math.cos(still_image_dict[1][1]*math.pi/180)) 
-
-
-                assert frame.shape[0:2] == (cam_size[1], cam_size[0])
-                # move the origin coordinate to the top left
-                # the video has a coordinate point that is based off of the left corner
-
-                frame_y = row.frame_y_pt - cam_size[1]/2
-                frame_x = row.frame_x_pt - cam_size[0]/2
-
-                # local frame
-                # frame_y = row.frame_y_pt 
-                # frame_x = row.frame_x_pt
-
-                # finding angles and rotation
-                x_angles = good_angles[row.Index] # in degrees
-                x_angles = x_angles * np.pi/180
-                rotation_matrix = np.array([
-                                    [np.cos(x_angles), -np.sin(x_angles)],
-                                    [np.sin(x_angles), np.cos(x_angles)]
-                                ])
-                # put the coordinates relative to the center of the frame
-                rotation_angles = np.array([frame_x # - cam_size[1]/2
-                                            , 
-                                            frame_y # - cam_size[0]/2
-                                            ])
-                # Rotate
-                rotated_coors = rotation_matrix @ rotation_angles
-                # reestablish point in the corner
-                frame_y = rotated_coors[1]  # + cam_size[1]/2
-                frame_x = rotated_coors[0]  # + cam_size[0]/2
-                # print("angles: ", x_angles)
-                # print("stillx, stillk_y: ", (frame_x, frame_y))
-                # print("rotated coordinates: ", rotated_coors)
-
-                # Detect the difference between the 2 frames
-                cam_gps_lat = x_lat + ((((frame_y))*cam_y_size)/ r_earth) * (180 / math.pi)
-                cam_gps_long = x_long + (((frame_x)*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(cam_gps_lat*math.pi/180)
-                
-                # cam_gps_lat = still_image_dict[1][1] - ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi
-                # cam_gps_long = still_image_dict[1][2] - (((row.still_x_pt*x_size + ((row.frame_x_pt) - cam_size[0]/2)*cam_x_size)/ r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)) 
-                # print("x_coor change: ", ((row.still_y_pt*y_size + ((row.frame_y_pt) - cam_size[1]/2))*cam_y_size / r_earth) * 180/math.pi)
-
-                cam_gps_lat_sum.append(cam_gps_lat)
-                cam_gps_long_sum.append(cam_gps_long) 
-                angle_sum.append(x_angles)
-                counter+=1
+                x_lat = still_image_dict[1][1] - ((row.still_y_pt)*y_size / r_earth) * (180 / math.pi)
+                x_long = still_image_dict[1][2] - (((row.still_x_pt)*x_size / r_earth) * (180 / math.pi) / math.cos(still_image_dict[1][1]*math.pi/180))
+                dist_to_centroid = get_distance_metres(x_lat, x_long, centroid_gps_lat, centroid_gps_long)
+                print(dist_to_centroid)
+                if dist_to_centroid < 5:
+                    still_gps_lat = x_lat
+                    still_gps_long = x_long
+                    print((x_lat, x_long))
+                    print((((row.frame_y_pt) - cam_size[1]/2)*cam_y_size))
+                    print((((row.frame_x_pt) - cam_size[0]/2)*cam_x_size))
+                    best_match_idx = row.Index
+                    cluster_matches.append(good_matches[row.Index])
+                    # finding angles and rotation
+                    x_angles = good_angles[row.Index] # in degrees
+                    x_angles = x_angles * np.pi/180
+                    rotation_matrix = np.array([
+                                        [np.cos(x_angles), -np.sin(x_angles)],
+                                        [np.sin(x_angles), np.cos(x_angles)]
+                                    ])
+                    # put the coordinates relative to the center of the frame
+                    rotation_angles = np.array([frame_x # - cam_size[1]/2
+                                                , 
+                                                frame_y # - cam_size[0]/2
+                                                ])
+                    # Rotate
+                    rotated_coors = rotation_matrix @ rotation_angles
+                    # reestablish point in the corner
+                    frame_y = (row.frame_y_pt) - cam_size[1]/2
+                    frame_x = (row.frame_x_pt) - cam_size[0]/2
+                    frame_y = rotated_coors[1]  - cam_size[1]/2
+                    frame_x = rotated_coors[0]  - cam_size[0]/2
+                    # print("angles: ", x_angles)
+                    # print("stillx, stillk_y: ", (frame_x, frame_y))
+                    # print("rotated coordinates: ", rotated_coors)
+                    cam_gps_lat = still_gps_lat - ((frame_y*cam_y_size)/ r_earth) * (180 / math.pi)
+                    cam_gps_long = still_gps_long + ((frame_x*cam_x_size) / r_earth) * (180 / math.pi) / math.cos(still_gps_lat*math.pi/180)
+                    cam_gps_lat_sum += cam_gps_lat
+                    cam_gps_long_sum += cam_gps_long
+                    angle_sum += x_angles
+                    counter+=1
                     #break
-            # TODO: The error is showing at the end
 
+            cam_gps_lat = cam_gps_lat_sum / counter
+            cam_gps_long = cam_gps_long_sum / counter
+            drone_lat = vehicle.location.global_relative_frame.lat
+            drone_lon = abs(vehicle.location.global_relative_frame.lon)
 
-            # median
-            # print("lat, long: ", (cam_gps_lat_sum, cam_gps_long_sum))
-
-            cam_gps_lat = statistics.median(cam_gps_lat_sum) 
-            cam_gps_long = statistics.median(cam_gps_long_sum)
-            angle = statistics.median(angle_sum)
-            
-            # cam_gps_lat = statistics.mean(cam_gps_lat_sum) 
-            # cam_gps_long = statistics.mean(cam_gps_long_sum)
-
+            gps_error = get_distance_metres(cam_gps_lat, cam_gps_long, drone_lat, drone_lon)
+            print("GPS error: "+str(gps_error))
             gps_dist_traveled = get_distance_metres(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon)
-
-            # print("difference in coordinates", difference_coor(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon))
-            # print(np.array(x).dtype)  # for NumPy arrays
-
-            # TODO: check the angle difference
-            if gps_dist_traveled > 100:
-                print("exiting distance")
-                
-                continue
-
-            angle_check = angle_bound(np.abs(np.abs(angle) -  np.abs(prev_angle)))
-            if angle_check == 0:
-                angle = 0
-            elif angle_check == 2:
-                print("exiting angle")
-                continue
-
-            # print("last pos: ", (last_prediction_lat, last_prediction_lon))
-            # print("cam gps: ", (cam_gps_lat, cam_gps_long))
-            # print("distance traveled: ", gps_dist_traveled)
+            print(gps_dist_traveled)
             total_dist_traveled += gps_dist_traveled
+
+            #print((still_gps_lat, still_gps_lat))
+            #print((cam_gps_long, cam_gps_lat))
+
+            filegps = open("comp_gps.txt", "a")
+            if filegps != None:
+                filegps.write("Estimated GPS: ("+str(cam_gps_lat)+","+str(cam_gps_long)+") Actual GPS: ("+str(drone_lat)+","+str(drone_lon)+") Error: "+str(gps_error)+"m")
+            filegps.close()
+            print("Estimated GPS: ("+str(cam_gps_lat)+","+str(cam_gps_long)+") Actual GPS: ("+str(drone_lat)+","+str(drone_lon)+") Error: "+str(gps_error)+"m")
+            
 
             last_prediction_lat = cam_gps_lat
             last_prediction_lon = cam_gps_long

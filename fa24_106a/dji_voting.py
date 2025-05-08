@@ -9,21 +9,25 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from collections import Counter
 from operator import itemgetter
+from dji_parser import parse_metadata
 
 
 still_image_dict = {
     0:('media/37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
-    # 1:('37.872312N_122.319072W_235.56H_364.08W.png', 37.872312, 122.319072, 235.56, 364.08), 
-    1:('media/dji_pic.png', 37.8719660, 122.3186288, 102, 150), 
+    # 1:('media/37.872312N_122.319072W_235.56H_364.08W.png', 37.872312, 122.319072, 235.56, 364.08), 
+    # 1:('media/pair2.png', 37.8722765, 122.3193286, 279.09, 318),
+    1:('media/pair3.png', 37.8714926, 122.3184300, 81.3, 160.08), 
+
+    # 1:('media/dji_pic.png', 37.8719660, 122.3186288, 102, 150), 
     2:('media/37.874496H_122.322454W_242.73H_297.8W.png', 37.874496, 122.322454, 242.73, 297.8), 
     3:('media/37.874496N_122.319072W_242.73H_364.08W.png', 37.874496, 122.319072, 242.73, 364.08)
 }
 
 
 r_earth = 6378000
-drone_alt = 50
-drone_lat = 37.87119 #vehicle.home_location.lat
-drone_lon = 122.3176 # vehicle.home_location.lon
+drone_alt = 106.500
+drone_lat = 37.871293 #vehicle.home_location.lat
+drone_lon = 122.317558 # vehicle.home_location.lon
 # drone_lat = 37.8719660 #vehicle.home_location.lat
 # drone_lon = 122.3186288 # vehicle.home_location.lon
 
@@ -90,7 +94,7 @@ def angle_bound(angle):
 
 # 1. Load the still image and the video
 still_image = cv2.imread(still_image_dict[1][0], cv2.IMREAD_GRAYSCALE)
-video_path = 'dji_flight.MOV'
+video_path = 'DJI_20250507154925_0025_D.MP4'
 horizontal_size = still_image.shape[:2][1]
 print(horizontal_size)
 vertical_size = still_image.shape[:2][0]
@@ -120,9 +124,11 @@ search_params = dict(checks=50)  # number of checks (higher is more accurate)
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 
 # 4. Open the video file
-vid = "media/dji_fly.MOV"
-cap = cv2.VideoCapture(vid)
+video_path = 'DJI_20250507160257_0026_D.MP4'
+cap = cv2.VideoCapture(video_path)
 
+parsed = parse_metadata("DJI_20250507160257_0026_D.SRT")
+df = pd.DataFrame(parsed)
 
 print(cap.get(3))
 print(cap.get(4))
@@ -154,6 +160,11 @@ while cap.isOpened():
         cam_y_size = cam_y / cam_size[1]
         # Convert the frame to grayscale
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Image preprocess
+        gray_frame = cv2.GaussianBlur(gray_frame, (13,13), 0)
+        # edges = cv2.Canny(gray_frame, 50, 200)
+        # mod_rec = drawRectangles(edges, 2, 20, 150, gray_frame)
 
         # 6. Detect keypoints and descriptors in the frame
         kpts_frame = orb.detect(gray_frame, None)
@@ -272,7 +283,8 @@ while cap.isOpened():
 
             # median
             # print("lat, long: ", (cam_gps_lat_sum, cam_gps_long_sum))
-
+            if len(cam_gps_lat_sum) == 0 or len(cam_gps_long_sum) == 0 or len(angle_sum) == 0:
+                continue
             cam_gps_lat = statistics.median(cam_gps_lat_sum) 
             cam_gps_long = statistics.median(cam_gps_long_sum)
             angle = statistics.median(angle_sum)
