@@ -185,10 +185,10 @@ vid_mapping = args.video
 rtsp_url = args.rtsp
 rtmp_url = args.rtmp
 
-NW_corner = LocationGlobalRelative(37.6571885, -121.8872434, 61)
-NE_corner = LocationGlobalRelative(37.6571885, -121.8858862, 61)
-SE_corner = LocationGlobalRelative(37.6549716, -121.8858862, 61)
-SW_corner = LocationGlobalRelative(37.6549716, -121.8872434, 61)
+NW_corner = LocationGlobalRelative(37.8724990, -122.3190522, 61)
+NE_corner = LocationGlobalRelative(37.8728674, -122.3177487, 61)
+SE_corner = LocationGlobalRelative(37.8712964, -122.3165900, 61)
+SW_corner = LocationGlobalRelative(37.8709873, -122.3179793, 61)
 
 
 cmds1 = scan_mission(NW_corner, NE_corner, SE_corner, SW_corner, 61)
@@ -311,7 +311,7 @@ while vehicle.armed:
 
 utils.RTL(vehicle)
 
-while vehicle.armed = "ARMED":
+while vehicle.armed == "ARMED":
     print("Returning to land. Will terminate once landed.")
     time.sleep(3)
 

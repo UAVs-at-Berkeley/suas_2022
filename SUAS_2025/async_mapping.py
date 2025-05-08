@@ -26,7 +26,7 @@ parser.add_argument('-vid', '--video', action="store_true",
 parser.add_argument('-rts', '--rtsp', nargs='?', const="rtsp://192.168.144.25:8554/main.264", type=str, default="rtsp://192.168.144.25:8554/main.264",
                    help="RTSP connection string. By default rtsp://192.168.144.25:8554/main.264 is used")
 parser.add_argument('-rtm', '--rtmp', nargs='?', const="rtmp://127.0.0.1:1935/live/webcam", type=str, default="rtmp://127.0.0.1:1935/live/webcam",
-                   help="RTMP connection string. By default rtmp://127.0.0.1:1935/live/webcam is used")                    
+                   help="RTMP connection string. By default rtmp://192.168.142.36:1935/live/webcam is used")                    
 args = parser.parse_args()
 
 lastwaypoint = 7

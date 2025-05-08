@@ -22,17 +22,17 @@ args = parser.parse_args()
 connection_string = args.connect
 
 print('Connecting to vehicle on: %s' % connection_string)
-vehicle = connect(connection_string, wait_ready=True)
+# vehicle = connect(connection_string, wait_ready=True)
 
-cmds = vehicle.commands
-cmds.download()
-cmds.wait_ready()
-if not vehicle.home_location:
-    print("Waiting for home location ...")
+# cmds = vehicle.commands
+# cmds.download()
+# cmds.wait_ready()
+# if not vehicle.home_location:
+#     print("Waiting for home location ...")
 
 
-vehicle.gimbal.rotate(-90, 0, 0)
-time.sleep(10)
+# vehicle.gimbal.rotate(-90, 0, 0)
+# time.sleep(10)
 
 still_image_dict = {
     0:('37.872310N_122.322454W_231.23H_297.8W.png', 37.872310, 122.322454, 231.23, 297.8), 
@@ -43,13 +43,13 @@ still_image_dict = {
 
 
 r_earth = 6378000
-drone_alt = 30
+drone_alt = 61
 drone_lat = 37.87119 #vehicle.home_location.lat
 drone_lon = 122.3176# vehicle.home_location.lon
 last_prediction_lat = drone_lat
 last_prediction_lon = drone_lon
-h_fov = 71.5
-d_fov = 79.5
+h_fov = 61.5
+d_fov = 69.5
 cam_size = (1920, 1080)
 droner_lat = 0
 droner_lon = 0
