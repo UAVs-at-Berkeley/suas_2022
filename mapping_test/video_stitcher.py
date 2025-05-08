@@ -295,13 +295,27 @@ class VideoStitcher:
             h, w = self.stitched_image.shape[:2]
             warped = cv2.warpPerspective(new_frame, H, (w, h))
 
-            # Create mask for blending
-            mask = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY) > 0
-            mask = mask.astype(np.float32)[..., np.newaxis]
+            # Create binary masks for valid pixels
+            stitched_valid = cv2.cvtColor(self.stitched_image, cv2.COLOR_BGR2GRAY) > 0
+            warped_valid = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY) > 0
 
-            # Blend the padded images
-            self.stitched_image = (1 - mask) * self.stitched_image + mask * warped
-            self.stitched_image = self.stitched_image.astype(np.uint8)
+            # Create combined mask for overlapping regions
+            overlap_mask = stitched_valid & warped_valid
+
+            # For non-overlapping regions, use the original masks
+            stitched_only = stitched_valid & ~warped_valid
+            warped_only = warped_valid & ~stitched_valid
+
+            # Initialize the result with the stitched image
+            result = self.stitched_image.copy()
+
+            # For overlapping regions, take the maximum value
+            result[overlap_mask] = np.maximum(self.stitched_image[overlap_mask], warped[overlap_mask])
+
+            # For warped-only regions, use the warped image
+            result[warped_only] = warped[warped_only]
+
+            self.stitched_image = result
             self.stitched_image = self.pad_frame(self.stitched_image, 0.2)
 
             # Update reference frame and features
@@ -521,7 +535,7 @@ if __name__ == "__main__":
     video_stitcher.configure(True, float('inf'), 0.2, "C:/Users/isaac/Downloads/stitch_debug")
     
     print("Starting video processing...")
-    video_stitcher.start_processing("C:/Users/isaac/Downloads/tiny.mp4")
+    video_stitcher.start_processing("C:/Users/isaac/Downloads/extrashort.mp4")
     
     print("Saving result...")
     success = video_stitcher.save_result("C:/Users/isaac/Downloads/stitched_image.jpg")
