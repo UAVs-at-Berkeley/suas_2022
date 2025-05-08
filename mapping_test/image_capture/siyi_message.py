@@ -9,7 +9,7 @@ Copyright 2022
 from os import stat
 from crc16_python import crc16_str_swap
 import logging
-from utils import toHex
+from mapping_test.image_capture.cam_utils import toHex
 
 class FirmwareMsg:
     seq=0

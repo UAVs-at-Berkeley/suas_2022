@@ -10,7 +10,7 @@ import socket
 from siyi_message import *
 from time import sleep, time
 import logging
-from utils import  toInt
+from mapping_test.image_capture.cam_utils import  toInt
 import threading
 import cameras
 
@@ -205,30 +205,30 @@ class SIYISDK:
                 self.disconnect()
                 break
 
-    # def recvLoop(self):
-    #     """
-    #     Continuously receives data from the camera.
-    #     """
-    #     try:
-    #         while not self._stop:
-    #             try:
-    #                 data, addr = self._socket.recvfrom(self._BUFF_SIZE)
-    #                 if self._stop:
-    #                     break
-    #                 # Process the received data here...
-    #             except socket.timeout:
-    #                 # If stopping, exit without logging
-    #                 if self._stop:
-    #                     break
-    #                 # Otherwise, continue waiting
-    #                 continue
-    #             except OSError:
-    #                 # Socket closed, exit loop
-    #                 break
-    #     except Exception as e:
-    #         self._logger.error(f"Error in receive loop: {e}")
-    #     finally:
-    #         self._logger.info("Exiting recvLoop")
+    def recvLoop(self):
+        """
+        Continuously receives data from the camera.
+        """
+        try:
+            while not self._stop:
+                try:
+                    data, addr = self._socket.recvfrom(self._BUFF_SIZE)
+                    if self._stop:
+                        break
+                    # Process the received data here...
+                except socket.timeout:
+                    # If stopping, exit without logging
+                    if self._stop:
+                        break
+                    # Otherwise, continue waiting
+                    continue
+                except OSError:
+                    # Socket closed, exit loop
+                    break
+        except Exception as e:
+            self._logger.error(f"Error in receive loop: {e}")
+        finally:
+            self._logger.info("Exiting recvLoop")
 
     def isConnected(self):
         return self._connected
@@ -994,26 +994,35 @@ def test():
 
     print("Firmware version: ", cam.getFirmwareVersion())
     
-    cam.requestGimbalSpeed(10,0)
-    sleep(3)
-    cam.requestGimbalSpeed(0,0)
-    print("Attitude: ", cam.getAttitude())
-    cam.requestCenterGimbal()
+    val = cam.getCurrentZoomLevel()
+    print("Current Zoom level: ",val)
 
-    val=cam.getRecordingState()
-    print("Recording state: ",val)
-    cam.requestRecording()
-    sleep(0.1)
-    val=cam.getRecordingState()
-    print("Recording state: ",val)
-    cam.requestRecording()
-    sleep(0.1)
-    val=cam.getRecordingState()
-    print("Recording state: ",val)
+    # cam.requestAbsoluteZoom(level=15.0)
+    # sleep(20)
 
-    print("Taking photo...")
-    cam.requestPhoto()
-    sleep(1)
+    cam.requestZoomOut()
+    sleep(0.1)
+
+    val = cam.getZoomLevel()
+    print("Zoom level: ",val)
+
+    val = cam.requestCurrentZoomLevel()
+    print("Current Zoom level: ",val)
+
+    val = cam.getCurrentZoomLevel()
+    print("Current Zoom level: ",val)
+
+    # cam.requestAbsoluteZoom(level=1.0)
+    # sleep(15)
+    cam.requestZoomOut()
+    sleep(0.1)
+
+    val = cam.getCurrentZoomLevel()
+    print("Current Zoom level: ",val)
+
+    val = cam.getZoomLevel()
+    print("Zoom level: ",val)
+
     print("Feedback: ", cam.getFunctionFeedback())
 
     cam.disconnect()

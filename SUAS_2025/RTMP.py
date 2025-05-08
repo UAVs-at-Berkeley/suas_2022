@@ -28,6 +28,7 @@ import threading
 import platform
 import subprocess
 import argparse
+from siyi_sdk import SIYISDK
 
 class RTMPSender:
     '''
@@ -185,6 +186,11 @@ class RTMPSender:
 
 
 def test(rtsp_url="rtsp://192.168.144.25:8554/main.264"):
+    cam=SIYISDK(debug=False)
+
+    if not cam.connect():
+        exit(1)
+
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print("No connection")
@@ -196,9 +202,16 @@ def test(rtsp_url="rtsp://192.168.144.25:8554/main.264"):
         while(True):
             ret, frame = cap.read()
             rtmp.setFrame(frame)
+            val = cam.getZoomLevel()
+            print("Zoom level: ",val)
+
+            val = cam.requestCurrentZoomLevel()
+            print("Current Zoom level: ",val)
+
     except KeyboardInterrupt:
         rtmp.stop()
         cap.release()
+        cam.disconnect()
         cv2.destroyAllWindows()
         # quit
         exit(0)
