@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import os
-
+import time
 class Config:
     def __init__(self, debug=False, maxframes=-1, padding_multiplier=0.2, debug_save_dir=None, downsample_factor=1):
         self.debug = debug
@@ -94,6 +94,7 @@ class VideoStitcher:
         Main processing loop that handles video capture, frame processing, and stitching.
         """
         try:
+            self.start_time = time.time()
             self.video_source = video_source
             # Initialize video capture
             cap = cv2.VideoCapture(self.video_source)
@@ -120,13 +121,8 @@ class VideoStitcher:
             
             print("added all frames to buffer")
 
-            cut1 = self.frameBuffer[0:self.frame_count//2]
-            cut2 = self.frameBuffer[self.frame_count//2:]
+            final_result = self.generate_sub_stitch(self.frameBuffer)
 
-            result1 = self.generate_sub_stitch(cut1)
-            result2 = self.generate_sub_stitch(cut2)
-
-            final_result = self.stitch_image(result1, result2)
             self.stitched_image = final_result
 
         except Exception as e:
@@ -138,9 +134,24 @@ class VideoStitcher:
             print("Video processing completed")
 
     def generate_sub_stitch(self, cut):
-        result = None
-        for frame in cut:
-            result = self.stitch_image(result, frame)
+        if len(cut) > 1:
+            cut1 = cut[0:len(cut)//2]
+            cut2 = cut[len(cut)//2:]
+
+            result1 = self.generate_sub_stitch(cut1)
+            result2 = self.generate_sub_stitch(cut2)
+
+            result = self.stitch_image(result1, result2)
+        else:
+            result = None
+            for frame in cut:
+                result = self.stitch_image(result, frame)
+        
+        print(f"stitched {len(cut)} frames. {self.successful_stitches} successful stitches in {time.time() - self.start_time} seconds")
+
+        # Save debug image if in DEBUG mode
+        if self.config.debug == True:
+            self.save_debug_image(result, len(cut), self.successful_stitches, "stitched")
         return result
 
     def process_frame(self, frame):
@@ -255,9 +266,11 @@ class VideoStitcher:
                 os.makedirs(self.debug_save_dir)
             
             # Create filename with frame and stitch information
-            filename = f"stitch_f{frame_num:03d}_s{stitch_num:03d}"
+            filename = ""
             if description:
                 filename += f"_{description}"
+            filename += f"stitch_f{frame_num:03d}_s{stitch_num:03d}"
+            
             filename += ".jpg"
             
             # Save the image
@@ -280,14 +293,14 @@ class VideoStitcher:
             None (updates self.stitched_image in place)
         """
         try:
+            # If this is the first frame, initialize the stitched image
+            if old_frame is None:
+                return self.pad_frame(new_frame.copy(), 0.2)
+            
             processed_frame, new_features = self.process_frame(new_frame)
             if processed_frame is None:
                 return None
-            # If this is the first frame, initialize the stitched image
-            if old_frame is None:
-                self.successful_stitches += 1
-                return self.pad_frame(new_frame.copy(), 0.2)
-
+            
             # Detect features in the stitched image
             stitched_features = self.detect_features(old_frame)
             if stitched_features is None:
@@ -328,11 +341,6 @@ class VideoStitcher:
             stitched_image = self.pad_frame(stitched_image, 0.2)
 
             self.successful_stitches += 1
-
-            # Save debug image if in DEBUG mode
-            if self.config.debug == True:
-                self.save_debug_image(new_frame, self.frame_count, self.successful_stitches, "new_frame")
-                self.save_debug_image(stitched_image, self.frame_count, self.successful_stitches, "stitched")
             
             return stitched_image
 
@@ -540,10 +548,10 @@ class VideoStitcher:
 if __name__ == "__main__":
     # Initialize video stitcher in debug mode
     video_stitcher = VideoStitcher()
-    video_stitcher.configure(True, 10, 0.2, "C:/Users/isaac/Downloads/stitch_debug", 1)
+    video_stitcher.configure(False, float('inf'), 0.2, "C:/Users/isaac/Downloads/stitch_debug", 1)
     
     print("Starting video processing...")
-    video_stitcher.start_processing("C:/Users/isaac/Downloads/tiny.mp4")
+    video_stitcher.start_processing("C:/Users/isaac/Downloads/extrashort.mp4")
     
     print("Saving result...")
     success = video_stitcher.save_result("C:/Users/isaac/Downloads/stitched_image.jpg")
