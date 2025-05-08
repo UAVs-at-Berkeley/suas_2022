@@ -94,7 +94,6 @@ class VideoStitcher:
         Main processing loop that handles video capture, frame processing, and stitching.
         """
         try:
-            self.start_time = time.time()
             self.video_source = video_source
             # Initialize video capture
             cap = cv2.VideoCapture(self.video_source)
@@ -134,9 +133,10 @@ class VideoStitcher:
             print("Video processing completed")
 
     def generate_sub_stitch(self, cut):
-        if len(cut) > 1:
-            cut1 = cut[0:len(cut)//2]
-            cut2 = cut[len(cut)//2:]
+        start_time = time.time()
+        if len(cut) >= 10:
+            cut1 = cut[0:len(cut)//2+1]
+            cut2 = cut[len(cut)//2-1:]
 
             result1 = self.generate_sub_stitch(cut1)
             result2 = self.generate_sub_stitch(cut2)
@@ -147,7 +147,7 @@ class VideoStitcher:
             for frame in cut:
                 result = self.stitch_image(result, frame)
         
-        print(f"stitched {len(cut)} frames. {self.successful_stitches} successful stitches in {time.time() - self.start_time} seconds")
+        print(f"stitched {len(cut)} frames. {self.successful_stitches} successful stitches in {time.time() - start_time} seconds")
 
         # Save debug image if in DEBUG mode
         if self.config.debug == True:
@@ -286,11 +286,11 @@ class VideoStitcher:
         Update the final stitched image by incorporating a new frame.
         
         Args:
-            new_frame: The new frame to be added to the stitched image
-            new_features: Dictionary containing keypoints, descriptors, and grayscale image
+            old_frame: The existing stitched image
+            new_frame: The new frame to be added
             
         Returns:
-            None (updates self.stitched_image in place)
+            numpy.ndarray: The new stitched image
         """
         try:
             # If this is the first frame, initialize the stitched image
@@ -305,15 +305,15 @@ class VideoStitcher:
             stitched_features = self.detect_features(old_frame)
             if stitched_features is None:
                 print("Failed to detect features in stitched image")
-                return
+                return None
 
-            # Compute homography between new frame and stitched image
+            # Compute transformation between new frame and stitched image
             H = self.compute_homography(stitched_features, new_features)
             if H is None:
-                print("Failed to compute homography for frame stitching")
-                return
+                print("Failed to compute transformation for frame stitching")
+                return None
 
-            # Warp the new frame using the homography
+            # Warp the new frame using the transformation
             h, w = old_frame.shape[:2]
             warped = cv2.warpPerspective(new_frame, H, (w, h))
 
@@ -346,17 +346,19 @@ class VideoStitcher:
 
         except Exception as e:
             print(f"Error updating stitched image: {str(e)}")
+            return None
 
     def compute_homography(self, features1, features2):
         """
         Compute transformation between two frames using their features.
+        Uses a similarity transformation to preserve scale and only allow rotation and translation.
         
         Args:
             features1: Dictionary containing keypoints, descriptors, and grayscale image of first frame
             features2: Dictionary containing keypoints, descriptors, and grayscale image of second frame
             
         Returns:
-            numpy.ndarray: 3x3 homography matrix or None if computation fails
+            numpy.ndarray: 3x3 transformation matrix or None if computation fails
         """
         try:
             # Create feature matcher
@@ -368,28 +370,33 @@ class VideoStitcher:
             # Apply ratio test to get good matches
             good_matches = []
             for m, n in matches:
-                if m.distance < 0.75 * n.distance:
+                if m.distance < 0.5 * n.distance:
                     good_matches.append(m)
             
+            #now sort the good matches by cartesian distance
+            good_matches = sorted(good_matches, key=lambda x: np.linalg.norm(np.array(features1['keypoints'][x.queryIdx].pt) - np.array(features2['keypoints'][x.trainIdx].pt)))
+
+            #now remove the last 10% of matches
+            good_matches = good_matches[:int(len(good_matches) * 0.8)]
+
             if len(good_matches) < 10:
-                print("Not enough good matches found for homography")
-                return None
+                print("Not enough good matches found for transformation")
             
             # Get corresponding points
             src_pts = np.float32([features1['keypoints'][m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
             dst_pts = np.float32([features2['keypoints'][m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
             
-            # Find homography using RANSAC
-            H, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, 5.0)
+            # Find similarity transformation using RANSAC
+            # This will only allow rotation, translation, and uniform scaling
+            M, inliers = cv2.estimateAffinePartial2D(dst_pts, src_pts, method=cv2.RANSAC, ransacReprojThreshold=5.0)
             
-            if H is None:
-                print("Failed to compute homography")
+            if M is None:
+                print("Failed to compute transformation")
                 return None
 
-            # Verify the homography is reasonable
-            if not self.verify_homography(H, features1['gray'].shape, features2['gray'].shape):
-                print("Homography verification failed")
-                return None
+            # Convert 2x3 affine matrix to 3x3 homography matrix
+            H = np.eye(3)
+            H[:2] = M
 
             # Debug visualization if in DEBUG mode
             if self.config.debug == True:
@@ -398,7 +405,7 @@ class VideoStitcher:
             return H
             
         except Exception as e:
-            print(f"Error computing homography: {str(e)}")
+            print(f"Error computing transformation: {str(e)}")
             return None
 
     def visualize_homography_matches(self, features1, features2, good_matches, H):
@@ -548,10 +555,12 @@ class VideoStitcher:
 if __name__ == "__main__":
     # Initialize video stitcher in debug mode
     video_stitcher = VideoStitcher()
-    video_stitcher.configure(False, float('inf'), 0.2, "C:/Users/isaac/Downloads/stitch_debug", 1)
+    video_stitcher.configure(True, float('inf'), 0.2, "C:/Users/isaac/Downloads/stitch_debug", 1)
     
     print("Starting video processing...")
-    video_stitcher.start_processing("C:/Users/isaac/Downloads/extrashort.mp4")
+    video_stitcher.start_processing("C:/Users/isaac/Downloads/shortened.mp4")
+    #images = [cv2.imread(f"C:/Users/isaac/Downloads/testimage{i+1}.png") for i in range(3)]
+    #video_stitcher.stitched_image = video_stitcher.generate_sub_stitch(images)
     
     print("Saving result...")
     success = video_stitcher.save_result("C:/Users/isaac/Downloads/stitched_image.jpg")
