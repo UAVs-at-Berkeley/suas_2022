@@ -317,7 +317,6 @@ while cap.isOpened():
                 print("rotated coordinates: ", rotated_coors)
 
 
-                
                 # Detect the difference between the 2 frames
                 cam_gps_lat = x_lat + (frame_y * frame_y_size/ r_earth) * 180/math.pi
                 cam_gps_long = x_long + (frame_x * frame_x_size / r_earth) * 180/math.pi / math.cos(cam_gps_lat*math.pi/180)
