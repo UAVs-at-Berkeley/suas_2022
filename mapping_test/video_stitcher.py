@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 class Config:
-    def __init__(self, debug=False, maxframes=-1, padding_multiplier=0.2, debug_save_dir=None):
+    def __init__(self, debug=False, maxframes=-1, padding_multiplier=0.2, debug_save_dir=None, downsample_factor=1):
         self.debug = debug
         self.maxframes = maxframes
         self.padding_multiplier = padding_multiplier
@@ -11,6 +11,7 @@ class Config:
             self.debug_save_dir = os.path.join(os.path.dirname(__file__), "stitch_debug")
         else:
             self.debug_save_dir = debug_save_dir
+        self.downsample_factor = downsample_factor
 
 class VideoStitcher:
     def __init__(self):
@@ -112,7 +113,7 @@ class VideoStitcher:
 
                 # Check if frame is usable (not blurry)
                 if not self.is_frame_usable(frame):
-                    print(f"Frame {self.frame_count} rejected - too blurry")
+                    print(f"Frame {self.frame_count} rejected")
                     continue
 
                 # Process the frame
@@ -170,10 +171,12 @@ class VideoStitcher:
         """
         try:
             # Debug mode: accept all frames
-            if self.config.debug == True:
+            if self.frame_count % self.config.downsample_factor == 0:
                 return True
+            else:
+                return False
                 
-            # Convert to grayscale
+            '''# Convert to grayscale
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             
             # Calculate Laplacian variance
@@ -188,7 +191,7 @@ class VideoStitcher:
                 print(f"Frame rejected - too blurry (variance: {variance:.2f})")
                 return False
                 
-            return True
+            return True'''
             
         except Exception as e:
             print(f"Error checking frame usability: {str(e)}")
@@ -532,7 +535,7 @@ class VideoStitcher:
 if __name__ == "__main__":
     # Initialize video stitcher in debug mode
     video_stitcher = VideoStitcher()
-    video_stitcher.configure(True, float('inf'), 0.2, "C:/Users/isaac/Downloads/stitch_debug")
+    video_stitcher.configure(True, float('inf'), 0.2, "C:/Users/isaac/Downloads/stitch_debug", 2)
     
     print("Starting video processing...")
     video_stitcher.start_processing("C:/Users/isaac/Downloads/extrashort.mp4")
