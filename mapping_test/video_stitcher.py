@@ -2,48 +2,83 @@ import cv2
 import numpy as np
 import os
 
+class Config:
+    def __init__(self, debug=False, maxframes=-1, padding_multiplier=0.2, debug_save_dir=None):
+        self.debug = debug
+        self.maxframes = maxframes
+        self.padding_multiplier = padding_multiplier
+        if debug_save_dir is None:
+            self.debug_save_dir = os.path.join(os.path.dirname(__file__), "stitch_debug")
+        else:
+            self.debug_save_dir = debug_save_dir
+
 class VideoStitcher:
-    def __init__(self, video_source, config, maxframes=-1):
-        self.video_source = video_source
-        self.config = config
-        self.frame_buffer = []
+    def __init__(self):
+        self.video_source = None
+        self.config = None
         self.stitched_image = None
         self.is_running = False
-        self.reference_frame = None
-        self.reference_features = None
-        self.last_successful_frame = None
-        self.last_successful_features = None
         self.frame_count = 0
         self.successful_stitches = 0
-        self.max_frames_before_reset = 5  # Reset reference frame after this many frames
-        self.frame_window = []  # Store recent frames for multi-frame stitching
-        self.max_window_size = 3  # Number of frames to keep in window
-        self.debug_save_dir = "C:/Users/isaac/Downloads/stitch_debug"  # Directory for debug images
-        self.max_frames = maxframes # -1 for no limit
-        if self.max_frames == -1:
-            self.max_frames = float('inf')
+        self.debug_save_dir = None  # Directory for debug images
+        
+    def configure(self, *args):
+        self.config = Config(*args)
+        self.max_frames = self.config.maxframes
+        self.padding_multiplier = self.config.padding_multiplier
+        self.debug_save_dir = self.config.debug_save_dir
 
-    def pad_frame(self, frame):
+    def pad_frame(self, frame, padding_multiplier=0.2):
         """
-        Pad a frame on all sides by its own width and height.
+        Pad a frame dynamically based on content proximity to edges.
+        If content is within 20% of any edge, expands padding in that direction.
         
         Args:
             frame: Input frame to pad
+            padding_multiplier: Base multiplier for padding size (default: 1.0)
             
         Returns:
             numpy.ndarray: Padded frame
         """
         try:
             h, w = frame.shape[:2]
-            padded_h = h + 2 * h
-            padded_w = w + 2 * w
+            
+            # Convert to grayscale and find non-zero pixels
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            non_zero = cv2.findNonZero(gray)
+            
+            if non_zero is None:
+                # If no non-zero pixels found, use default padding
+                padded_h = h + int(2 * h * padding_multiplier)
+                padded_w = w + int(2 * w * padding_multiplier)
+                y_offset = int(h * padding_multiplier)
+                x_offset = int(w * padding_multiplier)
+            else:
+                # Get bounding box of non-zero pixels
+                x, y, w_content, h_content = cv2.boundingRect(non_zero)
+                
+                # Calculate distances to edges
+                dist_left = x
+                dist_right = w - (x + w_content)
+                dist_top = y
+                dist_bottom = h - (y + h_content)
+                
+                # Calculate required padding for each edge
+                pad_left = int(w * padding_multiplier) if dist_left < w * padding_multiplier else 0
+                pad_right = int(w * padding_multiplier) if dist_right < w * padding_multiplier else 0
+                pad_top = int(h * padding_multiplier) if dist_top < h * padding_multiplier else 0
+                pad_bottom = int(h * padding_multiplier) if dist_bottom < h * padding_multiplier else 0
+                
+                # Calculate final dimensions and offsets
+                padded_h = h + pad_top + pad_bottom
+                padded_w = w + pad_left + pad_right
+                y_offset = pad_top
+                x_offset = pad_left
             
             # Create padded image with black background
             padded_image = np.zeros((padded_h, padded_w, 3), dtype=np.uint8)
             
-            # Place the frame in the center of the padded image
-            y_offset = h
-            x_offset = w
+            # Place the frame in the calculated position
             padded_image[y_offset:y_offset + h, x_offset:x_offset + w] = frame
             
             return padded_image
@@ -52,11 +87,12 @@ class VideoStitcher:
             print(f"Error padding frame: {str(e)}")
             return frame
 
-    def start_processing(self):
+    def start_processing(self, video_source):
         """
         Main processing loop that handles video capture, frame processing, and stitching.
         """
         try:
+            self.video_source = video_source
             # Initialize video capture
             cap = cv2.VideoCapture(self.video_source)
             if not cap.isOpened():
@@ -112,12 +148,11 @@ class VideoStitcher:
         """
         try:
             # Detect features in the frame
-            padded_frame = self.pad_frame(frame)
-            features = self.detect_features(padded_frame)
+            features = self.detect_features(frame)
             if features is None:
                 return None
                 
-            return padded_frame, features
+            return frame, features
             
         except Exception as e:
             print(f"Error processing frame: {str(e)}")
@@ -135,7 +170,7 @@ class VideoStitcher:
         """
         try:
             # Debug mode: accept all frames
-            if self.config == "DEBUG":
+            if self.config.debug == True:
                 return True
                 
             # Convert to grayscale
@@ -238,7 +273,7 @@ class VideoStitcher:
         try:
             # If this is the first frame, initialize the stitched image
             if self.stitched_image is None:
-                self.stitched_image = new_frame.copy()
+                self.stitched_image = self.pad_frame(new_frame.copy(), 0.2)
                 self.reference_frame = new_frame
                 self.reference_features = new_features
                 self.successful_stitches += 1
@@ -260,14 +295,14 @@ class VideoStitcher:
             h, w = self.stitched_image.shape[:2]
             warped = cv2.warpPerspective(new_frame, H, (w, h))
 
-            # Simple alpha blending for now
-            # We'll use a simple mask where the warped frame has non-zero pixels
+            # Create mask for blending
             mask = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY) > 0
             mask = mask.astype(np.float32)[..., np.newaxis]
 
-            # Blend the images
+            # Blend the padded images
             self.stitched_image = (1 - mask) * self.stitched_image + mask * warped
             self.stitched_image = self.stitched_image.astype(np.uint8)
+            self.stitched_image = self.pad_frame(self.stitched_image, 0.2)
 
             # Update reference frame and features
             self.reference_frame = new_frame
@@ -275,7 +310,7 @@ class VideoStitcher:
             self.successful_stitches += 1
 
             # Save debug image if in DEBUG mode
-            if self.config == "DEBUG":
+            if self.config.debug == True:
                 self.save_debug_image(new_frame, self.frame_count, self.successful_stitches, "new_frame")
                 self.save_debug_image(self.stitched_image, self.frame_count, self.successful_stitches, "stitched")
 
@@ -327,7 +362,7 @@ class VideoStitcher:
                 return None
 
             # Debug visualization if in DEBUG mode
-            if self.config == "DEBUG":
+            if self.config.debug == True:
                 self.visualize_homography_matches(features1, features2, good_matches, H)
                 
             return H
@@ -482,10 +517,11 @@ class VideoStitcher:
     
 if __name__ == "__main__":
     # Initialize video stitcher in debug mode
-    video_stitcher = VideoStitcher("C:/Users/isaac/Downloads/tiny.mp4", "DEBUG", -1)
+    video_stitcher = VideoStitcher()
+    video_stitcher.configure(True, float('inf'), 0.2, "C:/Users/isaac/Downloads/stitch_debug")
     
     print("Starting video processing...")
-    video_stitcher.start_processing()
+    video_stitcher.start_processing("C:/Users/isaac/Downloads/tiny.mp4")
     
     print("Saving result...")
     success = video_stitcher.save_result("C:/Users/isaac/Downloads/stitched_image.jpg")
