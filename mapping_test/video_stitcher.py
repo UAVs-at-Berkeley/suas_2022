@@ -22,7 +22,8 @@ class VideoStitcher:
         self.frame_count = 0
         self.successful_stitches = 0
         self.debug_save_dir = None  # Directory for debug images
-        
+        self.frameBuffer = []
+
     def configure(self, *args):
         self.config = Config(*args)
         self.max_frames = self.config.maxframes
@@ -101,33 +102,32 @@ class VideoStitcher:
 
             self.is_running = True
             self.frame_count = 0
+            self.frameBuffer = []
+            while self.frame_count < self.max_frames:
 
-            while self.is_running and self.frame_count < self.max_frames:
                 ret, frame = cap.read()
                 if not ret:
                     print("End of video stream")
                     break
-
-                self.frame_count += 1
-                print(f"Processing frame {self.frame_count}")
 
                 # Check if frame is usable (not blurry)
                 if not self.is_frame_usable(frame):
                     print(f"Frame {self.frame_count} rejected")
                     continue
 
-                # Process the frame
-                processed_frame, features = self.process_frame(frame)
-                if processed_frame is None:
-                    print(f"Frame {self.frame_count} processing failed")
-                    continue
+                self.frameBuffer.append(frame)
+                self.frame_count += 1
+            
+            print("added all frames to buffer")
 
-                # Update the stitched image
-                self.update_stitched_image(processed_frame, features)
+            cut1 = self.frameBuffer[0:self.frame_count//2]
+            cut2 = self.frameBuffer[self.frame_count//2:]
 
-                # Optional: Display progress
-                if self.frame_count % 10 == 0:
-                    print(f"Processed {self.frame_count} frames, {self.successful_stitches} successful stitches")
+            result1 = self.generate_sub_stitch(cut1)
+            result2 = self.generate_sub_stitch(cut2)
+
+            final_result = self.stitch_image(result1, result2)
+            self.stitched_image = final_result
 
         except Exception as e:
             print(f"Error in video processing: {str(e)}")
@@ -136,6 +136,12 @@ class VideoStitcher:
             if 'cap' in locals():
                 cap.release()
             print("Video processing completed")
+
+    def generate_sub_stitch(self, cut):
+        result = None
+        for frame in cut:
+            result = self.stitch_image(result, frame)
+        return result
 
     def process_frame(self, frame):
         """
@@ -262,7 +268,7 @@ class VideoStitcher:
         except Exception as e:
             print(f"Error saving debug image: {str(e)}")
 
-    def update_stitched_image(self, new_frame, new_features):
+    def stitch_image(self, old_frame, new_frame):
         """
         Update the final stitched image by incorporating a new frame.
         
@@ -274,16 +280,16 @@ class VideoStitcher:
             None (updates self.stitched_image in place)
         """
         try:
+            processed_frame, new_features = self.process_frame(new_frame)
+            if processed_frame is None:
+                return None
             # If this is the first frame, initialize the stitched image
-            if self.stitched_image is None:
-                self.stitched_image = self.pad_frame(new_frame.copy(), 0.2)
-                self.reference_frame = new_frame
-                self.reference_features = new_features
+            if old_frame is None:
                 self.successful_stitches += 1
-                return
+                return self.pad_frame(new_frame.copy(), 0.2)
 
             # Detect features in the stitched image
-            stitched_features = self.detect_features(self.stitched_image)
+            stitched_features = self.detect_features(old_frame)
             if stitched_features is None:
                 print("Failed to detect features in stitched image")
                 return
@@ -295,11 +301,11 @@ class VideoStitcher:
                 return
 
             # Warp the new frame using the homography
-            h, w = self.stitched_image.shape[:2]
+            h, w = old_frame.shape[:2]
             warped = cv2.warpPerspective(new_frame, H, (w, h))
 
             # Create binary masks for valid pixels
-            stitched_valid = cv2.cvtColor(self.stitched_image, cv2.COLOR_BGR2GRAY) > 0
+            stitched_valid = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY) > 0
             warped_valid = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY) > 0
 
             # Create combined mask for overlapping regions
@@ -310,26 +316,25 @@ class VideoStitcher:
             warped_only = warped_valid & ~stitched_valid
 
             # Initialize the result with the stitched image
-            result = self.stitched_image.copy()
+            result = old_frame.copy()
 
             # For overlapping regions, take the maximum value
-            result[overlap_mask] = np.maximum(self.stitched_image[overlap_mask], warped[overlap_mask])
+            result[overlap_mask] = np.maximum(old_frame[overlap_mask], warped[overlap_mask])
 
             # For warped-only regions, use the warped image
             result[warped_only] = warped[warped_only]
 
-            self.stitched_image = result
-            self.stitched_image = self.pad_frame(self.stitched_image, 0.2)
+            stitched_image = result
+            stitched_image = self.pad_frame(stitched_image, 0.2)
 
-            # Update reference frame and features
-            self.reference_frame = new_frame
-            self.reference_features = new_features
             self.successful_stitches += 1
 
             # Save debug image if in DEBUG mode
             if self.config.debug == True:
                 self.save_debug_image(new_frame, self.frame_count, self.successful_stitches, "new_frame")
-                self.save_debug_image(self.stitched_image, self.frame_count, self.successful_stitches, "stitched")
+                self.save_debug_image(stitched_image, self.frame_count, self.successful_stitches, "stitched")
+            
+            return stitched_image
 
         except Exception as e:
             print(f"Error updating stitched image: {str(e)}")
@@ -535,10 +540,10 @@ class VideoStitcher:
 if __name__ == "__main__":
     # Initialize video stitcher in debug mode
     video_stitcher = VideoStitcher()
-    video_stitcher.configure(True, float('inf'), 0.2, "C:/Users/isaac/Downloads/stitch_debug", 2)
+    video_stitcher.configure(True, 10, 0.2, "C:/Users/isaac/Downloads/stitch_debug", 1)
     
     print("Starting video processing...")
-    video_stitcher.start_processing("C:/Users/isaac/Downloads/extrashort.mp4")
+    video_stitcher.start_processing("C:/Users/isaac/Downloads/tiny.mp4")
     
     print("Saving result...")
     success = video_stitcher.save_result("C:/Users/isaac/Downloads/stitched_image.jpg")
