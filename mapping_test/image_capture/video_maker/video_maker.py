@@ -6,7 +6,7 @@ import os
 
 PATH_OF_SCRIPT = os.path.dirname(os.path.abspath(__file__)) #local directory, NOT the working directory
 RSTP_URL = "rtsp://192.168.144.25:8554/main.264"
-FOURCC = cv2.VideoWriter_fourcc(*'H264')  
+FOURCC = cv2.VideoWriter_fourcc(*'mp4v') #codes that work 'avc1', 'mp4v', 'MJPG'(only works with avi)  
 
 class VideoMaker:
     '''
@@ -22,14 +22,17 @@ class VideoMaker:
         self.parallel_process = None
 
         frame_width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        print(f"frame Width is {frame_width}")
         frame_height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"frame height is {frame_height}")
         fps = self.capture.get(cv2.CAP_PROP_FPS)
+        print(f"frame fps is {fps}")
 
         i = 0
-        while os.path.exists(f'{PATH_OF_SCRIPT}/video_{i}.avi'):
+        while os.path.exists(f'{PATH_OF_SCRIPT}/video_{i}.mp4'):
             i += 1
 
-        self.data = cv2.VideoWriter(f'{PATH_OF_SCRIPT}/video_{i}.avi', FOURCC, fps, (frame_width, frame_height))
+        self.data = cv2.VideoWriter(f'{PATH_OF_SCRIPT}/video_{i}.mp4', FOURCC, fps, (frame_width, frame_height)) # video formats that work '.mp4', '.avi'
 
     def recording_process(self):
         while self.recording_flag:
