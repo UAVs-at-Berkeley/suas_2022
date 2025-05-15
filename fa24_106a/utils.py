@@ -209,7 +209,84 @@ def truncated_adaptive_gamma(image, tau=0.3, alpha=0.2):
 
     return result
 
+# def isolateCurve(grey_image):
+#     # Edge detection
+#     blurred = cv2.GaussianBlur(grey_image, (11, 11), 0)
+#     edges = cv2.Canny(blurred, 100, 200)
+    
+#     # Contour finding
+#     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+#     # Initialize variables to store the best contour and its area
+#     len_threshold = 2
+#     best_contour = None
+#     best_contours = []
+#     max_area = -1
 
+#     # Curved line isolation
+#     for contour in contours:
+#         # ===== isolate single best contours =====
+#         # # Calculate the area of the contour
+#         # area = cv2.contourArea(contour)
+        
+#         # # Approximate the contour to simplify its shape
+#         # perimeter = cv2.arcLength(contour, True)
+#         # approx = cv2.approxPolyDP(contour, 0.04 * perimeter, True)
+        
+#         # # Check if the contour is curved based on the number of vertices
+#         # if len(approx) > 5 and area > max_area:
+#         #    best_contour = contour
+#         #    max_area = area
+#         # ========================================
+#         # Calculate the area of the contour
+#         area = cv2.contourArea(contour)
+        
+#         # Approximate the contour to simplify its shape
+#         perimeter = cv2.arcLength(contour, True)
+#         approx = cv2.approxPolyDP(contour, 0.04 * perimeter, True)
+#         if len(approx) > len_threshold:
+#             best_contours.append(contour)
+
+
+#     # Masking and extraction
+#     mask = np.zeros_like(blurred)
+#     # cv2.drawContours(mask, [best_contour], -1, 255, cv2.FILLED)
+#     cv2.drawContours(mask, best_contours, -1, 255, cv2.FILLED)
+#     result = cv2.bitwise_and(grey_image, grey_image, mask=mask)    
+#     return result, mask
+
+# def hsv_filter(image, lower_hsv, upper_hsv):
+#     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+#     mask = cv2.inRange(hsv_image, lower_hsv, upper_hsv)
+#     result = cv2.bitwise_and(image, image, mask=mask)
+#     return result, mask
+
+# def remove_inner_contours(binary_image):
+#     contours, hierarchy = cv2.findContours(binary_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+#     image_copy = cv2.cvtColor(binary_image, cv2.COLOR_GRAY2BGR)
+#     if hierarchy is not None:
+#         for i, contour in enumerate(contours):
+#             # Check if the contour has a parent
+#             if hierarchy[0][i][3] != -1:
+#                 # Draw the inner contour in green
+#                 cv2.drawContours(image_copy, [contour], -1, (0, 255, 0), cv2.FILLED)
+#     green = np.array([0, 255, 0])
+#     green_mask = np.all(image_copy == green, axis=2)
+#     image_copy[green_mask] = [0, 0, 0]
+#     result = cv2.cvtColor(image_copy, cv2.COLOR_BGR2GRAY)
+#     return result
+
+# def remove_smaller_contours(binary_image, max_contour_len):
+#     contours, _ = cv2.findContours(eroded_copy, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+#     filtered_contours = [cnt for cnt in contours if cv2.arcLength(cnt, True) <= max_contour_len]
+
+#     image_copy = cv2.cvtColor(binary_image, cv2.COLOR_GRAY2BGR)
+#     cv2.drawContours(image_copy, filtered_contours, -1, (255, 0, 0), cv2.FILLED)
+#     blue = np.array([255, 0, 0])
+#     blue_mask = np.all(image_copy == blue, axis=2)
+#     image_copy[blue_mask] = [0, 0, 0]
+#     result = cv2.cvtColor(image_copy, cv2.COLOR_BGR2GRAY)
+#     return result
 
 
 still_image_dict = {

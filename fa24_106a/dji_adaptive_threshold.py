@@ -19,6 +19,8 @@ from utils import *
 #######****************************************************************##########
 
 still_image_dict = ('DJI_20250507160257_0026_D_2.png', 37.8714865, 122.3183067, 97, 128)
+still_image_dict = ('media/dji_pic.png', 37.8719660, 122.3186288, 102, 150)
+# still_image_dict = ('media/pair1.png', 37.872312, 122.319072, 170.3, 318)
 
 
 # 2. Detect keypoints and descriptors in the still image using ORB
@@ -110,7 +112,10 @@ vid_matches = cv2.VideoWriter('vid_matches_adaptive_threshold.mp4', cv2.VideoWri
 vid_location = cv2.VideoWriter('vid_location_adaptive_threshold.mp4', cv2.VideoWriter_fourcc(*'MJPG'), 20, (still_image.shape[1], still_image.shape[0]))
 
 ct = 0
+gps_error_sum = 0
+
 i = 1
+sample = 0
 # 5. Process each frame of the video
 while cap.isOpened():
     ret, frame = cap.read()
@@ -134,19 +139,6 @@ while cap.isOpened():
         cam_x_size = cam_x / cam_size[0]
         cam_y_size = cam_y / cam_size[1]
 
-        # lab= cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-        # l_channel, a, b = cv2.split(lab)
-        # clahe = cv2.createCLAHE(clipLimit=.75, tileGridSize=(10,10)) 
-        # cl = clahe.apply(l_channel)
-        # # merge the CLAHE enhanced L-channel with the a and b channel
-        # limg = cv2.merge((cl,a,b))
-
-        # # Converting image from LAB Color model to BGR color spcae
-        # enhanced_img = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-
-        # # Stacking the original image with the enhanced image
-        # frame = np.hstack((frame, enhanced_img))
-
 
         # Convert the frame to grayscale
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -164,8 +156,6 @@ while cap.isOpened():
         gray_frame = np.clip(gray_frame, 0, 255).astype(np.uint8)
         print("enhanced gray frame: ", gray_frame.shape)
        
-
-
         kpts_frame = orb.detect(gray_frame, None)
         kp_frame, des_frame = desc.compute(gray_frame, kpts_frame)
         frame_kps = cv2.drawKeypoints(gray_frame, kp_frame, None, color=(0,255,0), flags=0)
@@ -317,8 +307,9 @@ while cap.isOpened():
             drone_lat = df['latitude'].iloc[i]
             drone_lon = df['longitude'].iloc[i]
 
-            gps_error = get_distance_metres(cam_gps_lat, cam_gps_long, drone_lat, drone_lon)
+            gps_error = get_distance_metres(cam_gps_lat, cam_gps_long, drone_lat, -1 * drone_lon)
             print("GPS error: "+str(gps_error))
+            gps_error_sum += gps_error
             gps_dist_traveled = get_distance_metres(cam_gps_lat, cam_gps_long, last_prediction_lat, last_prediction_lon)
             print(gps_dist_traveled)
             total_dist_traveled += gps_dist_traveled
@@ -369,7 +360,7 @@ while cap.isOpened():
             # 9. Draw the matches
             #print(good_matches[best_match_idx])
             #print(good_matches)
-            matched_img = cv2.drawMatches(still_image, kp_still, frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
+            matched_img = cv2.drawMatches(still_image, kp_still, gray_frame, kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_DEFAULT)
             vid_matches.write(matched_img)
             matched_img = cv2.resize(matched_img, (0,0), fx=0.5, fy=0.5) 
 
@@ -383,6 +374,7 @@ while cap.isOpened():
             # Press 'q' to quit the video
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+            sample+= 1
 
     i += 1
 print(total_dist_traveled)
@@ -391,7 +383,9 @@ print("______________________________________________________")
 print("initial_pos: ", initial_pos)
 print("final coordinates: ", (cam_gps_lat, cam_gps_long))
 print("total distance: ",  total_dist_traveled)
-print("displacement: ", get_distance_metres(cam_gps_lat, cam_gps_long, initial_pos[0], initial_pos[1]))
+# print("displacement: ", get_distance_metres(cam_gps_lat, cam_gps_long, initial_pos[0], initial_pos[1]))
+print("average displacement error ", gps_error_sum/sample)
+
 print("______________________________________________________")
 
 # Release the video capture and close the window

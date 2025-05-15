@@ -44,13 +44,16 @@ def drawRectangles(img_gray, r, min_gap, white_thresh, drawing_img):
 
 
 # 1. Load the still image and the video
-still_image = cv2.imread('dji_screenshot.png', cv2.IMREAD_GRAYSCALE)
-still_image2 = cv2.imread('ref/earth7.png', cv2.IMREAD_GRAYSCALE)
+# still_image = cv2.imread('dji_screenshot.png', cv2.IMREAD_GRAYSCALE)
+# still_image2 = cv2.imread('ref/earth7.png', cv2.IMREAD_GRAYSCALE)
+
+still_image = cv2.imread('media/pair2.png', cv2.IMREAD_GRAYSCALE)
+still_image2 = cv2.imread('media/pair1.png', cv2.IMREAD_GRAYSCALE)
 
 # Image preprocess
-blur = cv2.GaussianBlur(still_image, (13,13), 0)
-edges = cv2.Canny(blur, 50, 200)
-mod_rec = drawRectangles(edges, 2, 20, 150, still_image)
+# blur = cv2.GaussianBlur(still_image, (13,13), 0)
+# edges = cv2.Canny(blur, 50, 200)
+# mod_rec = drawRectangles(edges, 7, 20, 150, still_image)
 
 # # Adjust the brightness and contrast 
 # # Adjusts the brightness by adding 10 to each pixel value 
@@ -66,15 +69,15 @@ mod_rec = drawRectangles(edges, 2, 20, 150, still_image)
 
 
 # Image preprocess 2
-blurred_2 = cv2.GaussianBlur(still_image2, (5,5), 0)
-edges_2 = cv2.Canny(blurred_2, 50, 200)
-mod_rec_2 = drawRectangles(edges_2, 2, 20, 150, still_image2)
+# blurred_2 = cv2.GaussianBlur(still_image2, (5,5), 0)
+# edges_2 = cv2.Canny(blurred_2, 50, 200)
+# mod_rec_2 = drawRectangles(edges_2, 7, 20, 150, still_image2)
 
 # still_image2 = clahe.apply(still_image2)
 
 
 # 2. Detect keypoints and descriptors in the still image using ORB
-orb = cv2.ORB_create(   nfeatures      = 500,    # more keypoints
+orb = cv2.ORB_create(   nfeatures      = 1000,    # more keypoints
                         scaleFactor    = 1.2,     # finer image pyramid
                         nlevels        = 2,
                         edgeThreshold  = 20,      # detect closer to borders
@@ -126,7 +129,7 @@ if des_frame is not None:
     for m in matches:
         if len(m) == 2:  # Ensure that we have two matches
             # Apply Lowe's ratio test
-            if m[0].distance < 0.55 * m[1].distance:
+            if m[0].distance < 0.85 * m[1].distance:
                 still_pt = kp_still[m[0].queryIdx].pt
                 frame_pt = kp_frame[m[0].trainIdx].pt
                 good_matches.append(m[0])
