@@ -10,7 +10,7 @@ import socket
 from siyi_message import *
 from time import sleep, time
 import logging
-from mapping_test.image_capture.cam_utils import  toInt
+from cam_utils import  toInt
 import threading
 import cameras
 

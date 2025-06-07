@@ -21,7 +21,7 @@ if not cap.isOpened():
     print("Error: Unable to open the video stream.")
     exit()
 
-vid_matches = cv2.VideoWriter('mapping2.avi', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(cap.get(3)), int(cap.get(4))))
+vid_matches = cv2.VideoWriter('mapping3.avi', cv2.VideoWriter_fourcc(*'MJPG'), 20, (int(cap.get(3)), int(cap.get(4))))
 ct = 0
 while True:
     # Capture frame-by-frame

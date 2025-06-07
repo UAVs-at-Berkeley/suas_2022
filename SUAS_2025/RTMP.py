@@ -207,6 +207,7 @@ def test(rtsp_url="rtsp://192.168.144.25:8554/main.264"):
 
             val = cam.requestCurrentZoomLevel()
             print("Current Zoom level: ",val)
+            #time.sleep(0.2)
 
     except KeyboardInterrupt:
         rtmp.stop()
