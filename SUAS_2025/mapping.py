@@ -132,33 +132,6 @@ def scan_mission(NW_coord, NE_coord, SE_coord, SW_coord, drone_alt, cam_h_fov=71
                 cmds.append(Command( 0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 1, delay, 0, 0, 0, coord.lat, coord.lon, coord.alt))
     return cmds
 
-def distance_to_current_waypoint():
-    """
-    Gets distance in metres to the current waypoint.
-    It returns None for the first waypoint (Home location).
-    """
-    nextwaypoint = vehicle.commands.next
-    if nextwaypoint==0:
-        return None
-    missionitem=vehicle.commands[nextwaypoint-1] #commands are zero indexed
-    lat = missionitem.x
-    lon = missionitem.y
-    alt = missionitem.z
-    targetWaypointLocation = LocationGlobalRelative(lat,lon,alt)
-    distancetopoint = utils.get_distance_metres(vehicle.location.global_frame, targetWaypointLocation)
-    return distancetopoint
-
-def getCurrentWaypoint():
-    nextwaypoint = vehicle.commands.next
-    if nextwaypoint==0:
-        return None
-    missionitem=vehicle.commands[nextwaypoint-1]
-    lat = missionitem.x
-    lon = missionitem.y
-    alt = missionitem.z
-    targetWaypointLocation = LocationGlobalRelative(lat,lon,alt)
-    return targetWaypointLocation
-
 # Set up option parsing to get connection string
 import argparse
 parser = argparse.ArgumentParser(description='Commands vehicle using vehicle.simple_goto.')
@@ -178,8 +151,6 @@ parser.add_argument('-rtm', '--rtmp', nargs='?', const="rtmp://127.0.0.1:1935/li
                    help="RTMP connection string. By default rtmp://127.0.0.1:1935/live/webcam is used")                    
 args = parser.parse_args()
 
-lastwaypoint=13
-
 connection_string = args.connect
 verbose = args.verbose
 show_stream = args.stream
@@ -188,14 +159,14 @@ vid_mapping = args.video
 rtsp_url = args.rtsp
 rtmp_url = args.rtmp
 
-NW_corner = LocationGlobalRelative(37.8724990, -122.3190522, 61)
-NE_corner = LocationGlobalRelative(37.8728674, -122.3177487, 61)
-SE_corner = LocationGlobalRelative(37.8712964, -122.3165900, 61)
-SW_corner = LocationGlobalRelative(37.8709873, -122.3179793, 61)
+#NW_corner = LocationGlobalRelative(37.8724990, -122.3190522, 61)
+#NE_corner = LocationGlobalRelative(37.8728674, -122.3177487, 61)
+#SE_corner = LocationGlobalRelative(37.8712964, -122.3165900, 61)
+#SW_corner = LocationGlobalRelative(37.8709873, -122.3179793, 61)
 
 
-cmds1 = scan_mission(NW_corner, NE_corner, SE_corner, SW_corner, 61)
-utils.write_missionlist("mapping.txt", cmds1)
+#cmds1 = scan_mission(NW_corner, NE_corner, SE_corner, SW_corner, 61)
+#utils.write_missionlist("mapping.txt", cmds1)
 
 sitl = None
 cap = None
@@ -221,6 +192,8 @@ if verbose:
 
 cmds = utils.downloadCommands(vehicle)
 
+lastwaypoint = len(cmds) - 1
+
 cap = cv2.VideoCapture(rtsp_url)
 if not cap.isOpened():
     print("No connection")
@@ -231,8 +204,7 @@ if show_stream:
     rtmp.start()
 
 if vid_mapping:
-    video = VideoMaker(cap)
-    video.start()
+    video_maker = cv2.VideoWriter('mappingfull.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
 
 if show_stream:
     ret, frame = cap.read()
@@ -255,7 +227,7 @@ while not vehicle.is_armable:
         if show_stream:
             rtmp.stop()
         if vid_mapping:
-            video.stop()
+            video_maker.release()
         cap.release()
         cv2.destroyAllWindows()
         # quit
@@ -267,39 +239,35 @@ while vehicle.mode != VehicleMode("AUTO"):
     time.sleep(3)
 
 print("Entered AUTO mode")
-vehicle.gimbal.rotate(-90, 0, 0)
-utils.setYaw(vehicle, 325)
 
 try:
     while True:
         nextwaypoint=vehicle.commands.next
         frame = None
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        if show_stream:
-            rtmp.setFrame(frame)
-
+        waypoint = utils.getCurrentWaypoint(vehicle)
         if nextwaypoint == lastwaypoint:
             break
-
-        while utils.distance_to_current_waypoint(vehicle) < 2 and vehicle.groundspeed < 1:
-            waypoint = utils.getCurrentWaypoint(vehicle)
-            #if streaming to rtmp, just save frame from earlier, otherwise capture and save
+        while nextwaypoint >= 8:
+            ret, frame = cap.read()
+            if not ret:
+                continue
             if show_stream:
+                rtmp.setFrame(frame)
                 cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(waypoint.lat)}_{str(waypoint.lon)}.jpg', frame)
-            else:
-                cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(waypoint.lat)}_{str(waypoint.lon)}.jpg', frame)
-            
+                rtmp.setFrame(frame)
+                break
+            if vid_mapping:
+                video_maker.write(frame)  
+                break    
 
-        print('Distance to waypoint (%s): %s' % (nextwaypoint, distance_to_current_waypoint()))
+        print('Distance to waypoint (%s): %s' % (nextwaypoint, utils.distance_to_current_waypoint(vehicle)))
 
         time.sleep(1)
 except KeyboardInterrupt:
     if show_stream:
         rtmp.stop()
     if vid_mapping:
-        video.stop()
+        video_maker.release()
     cap.release()
     cv2.destroyAllWindows()
     # quit
@@ -319,7 +287,7 @@ if show_stream:
     rtmp.stop()
 
 if vid_mapping:
-    video.stop()
+    video_maker.release()
 
 cap.release()
 cv2.destroyAllWindows()
