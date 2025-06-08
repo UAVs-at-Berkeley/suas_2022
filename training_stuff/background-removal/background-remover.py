@@ -9,7 +9,7 @@ if __name__ == '__main__':
     files = os.listdir(INPUT_DIRECTORY)
     for file in files:
         with open(INPUT_DIRECTORY + '//' + file, 'rb') as i:
-                new_file_name = OUTPUT_DIRECTORY + '\\no_background_' + file
+                new_file_name = OUTPUT_DIRECTORY + '\\nb_' + file
                 with open(new_file_name, 'wb') as o:
                     input = i.read()
                     output = remove(input)
