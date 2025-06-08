@@ -1,4 +1,5 @@
 from dronekit import connect, VehicleMode, LocationGlobalRelative, mavutil, Command
+from geopy.distance import geodesic
 import math
 import time
 
@@ -638,3 +639,320 @@ def setSpeed(vehicle, speed_type, speed = -1, throttle=-1):
         )
     # send command to vehicle
     vehicle.send_mavlink(msg)
+
+def compute_fov(sensor_width_mm, sensor_height_mm, focal_length_mm):
+    """
+    Computes horizontal and vertical FOV (in degrees) from sensor and focal length.
+    """
+    hfov_rad = 2 * math.atan(sensor_width_mm / (2 * focal_length_mm))
+    vfov_rad = 2 * math.atan(sensor_height_mm / (2 * focal_length_mm))
+    return math.degrees(hfov_rad), math.degrees(vfov_rad)
+
+#No pitch or yaw variation
+def calculate_object_gps_no_cam_params(
+    center_lat, center_lon,
+    object_x, object_y,
+    image_width, image_height,
+    altitude_m,
+    hfov_deg, dfov_deg,
+):
+    """
+    Calculates GPS coordinates of an object in an aerial nadir image.
+
+    Parameters:
+    - center_lat, center_lon: GPS coordinates of image center.
+    - object_x, object_y: Pixel coordinates of object in the image.
+    - center_x, center_y: Pixel coordinates of image center (image resolution / 2).
+    - altitude_m: Drone or plane altitude in meters.
+    - hfov_deg: Horizontal field of view of the camera in degrees.
+    - dfov_deg: Diagonal field of view of the camera in degrees.
+
+    Returns:
+    - (lat, lon): GPS coordinates of the object.
+    """
+
+    # Calculate image width and height in meters based on FOV and altitude
+    hfov_rad = math.radians(hfov_deg)
+    dfov_rad = math.radians(dfov_deg)
+
+    # Diagonal = sqrt(width^2 + height^2)
+    # tan(FOV/2) = (width / 2) / altitude => width = 2 * altitude * tan(FOV/2)
+    diag_view = 2 * altitude_m * math.tan(dfov_rad / 2)
+
+    # Assume square pixels
+    # width = diag / sqrt(1 + (height/width)^2)
+    # Use hfov to calculate width directly
+    width_m = 2 * altitude_m * math.tan(hfov_rad / 2)
+
+    # Now calculate height using Pythagorean theorem
+    height_m = math.sqrt(diag_view**2 - width_m**2)
+
+    # Meters per pixel
+    m_per_px_x = width_m / image_width
+    m_per_px_y = height_m / image_height
+
+    dx_px = object_x - image_width / 2
+    dy_px = object_y - image_height / 2
+
+    dx_m = dx_px * m_per_px_x
+    dy_m = dy_px * m_per_px_y
+
+    # Convert from local dx, dy in meters to GPS
+    # dx_m = East/West, dy_m = North/South
+    # dy_m north is negative (image y grows downward)
+    north_offset = -dy_m
+    east_offset = dx_m
+
+    # Use geopy to calculate offset in meters
+    destination = geodesic(meters=north_offset).destination((center_lat, center_lon), 0)
+    destination = geodesic(meters=east_offset).destination(destination, 90)
+
+    return destination.latitude, destination.longitude
+
+def calculate_object_gps_camera_params(
+    center_lat, center_lon,
+    object_x, object_y,
+    image_width, image_height,
+    altitude_m,
+    hfov_deg, dfov_deg,
+    focal_length_mm=5.2,
+    sensor_width_mm=5.37, sensor_height_mm=4.04, #1/2.7 in sensor
+    aperture_f=1.8 #F1.8-F2.5
+):
+    """
+    Calculates GPS coordinates of an object in an aerial nadir image.
+
+    Parameters:
+    - center_lat, center_lon: GPS coordinates of image center.
+    - object_x, object_y: Pixel coordinates of object in the image.
+    - center_x, center_y: Pixel coordinates of image center (image resolution / 2).
+    - altitude_m: Drone or plane altitude in meters.
+    - hfov_deg: Horizontal field of view of the camera in degrees.
+    - dfov_deg: Diagonal field of view of the camera in degrees.
+
+    Returns:
+    - (lat, lon): GPS coordinates of the object.
+    """
+
+    hfov_deg, vfov_deg = compute_fov(sensor_width_mm, sensor_height_mm, focal_length_mm)
+    
+    # Calculate width and height in meters on the ground
+    hfov_rad = math.radians(hfov_deg)
+    vfov_rad = math.radians(vfov_deg)
+
+    width_m = 2 * altitude_m * math.tan(hfov_rad / 2)
+    height_m = 2 * altitude_m * math.tan(vfov_rad / 2)
+
+    # Convert pixel coordinates to meters
+    m_per_px_x = width_m / image_width
+    m_per_px_y = height_m / image_height
+
+    dx_px = object_x - image_width / 2
+    dy_px = object_y - image_height / 2
+
+    dx_m = dx_px * m_per_px_x
+    dy_m = dy_px * m_per_px_y
+
+    # Convert from local dx, dy in meters to GPS
+    # dx_m = East/West, dy_m = North/South
+    # dy_m north is negative (image y grows downward)
+    north_offset = -dy_m
+    east_offset = dx_m
+
+    # Use geopy to calculate offset in meters
+    destination = geodesic(meters=north_offset).destination((center_lat, center_lon), 0)
+    destination = geodesic(meters=east_offset).destination(destination, 90)
+
+    return destination.latitude, destination.longitude
+
+
+#For Pitch and Yaw variation
+def pixel_to_camera_ray(x, y, image_width, image_height, hfov_deg, vfov_deg):
+    """
+    Convert pixel coordinates to a direction vector in camera space.
+    Camera looks along +Z, image plane is at Z = 1.
+    """
+    # Convert FOV to radians
+    hfov_rad = math.radians(hfov_deg)
+    vfov_rad = math.radians(vfov_deg)
+
+    # Normalized pixel coordinates (-1 to 1)
+    nx = (x - image_width / 2) / (image_width / 2)
+    ny = (y - image_height / 2) / (image_height / 2)
+
+    # Compute field of view scaling
+    x_angle = math.tan(hfov_rad / 2) * nx
+    y_angle = math.tan(vfov_rad / 2) * ny
+
+    # Vector in camera space (assuming Z forward)
+    ray_cam = [x_angle, y_angle, 1.0]
+    return ray_cam
+
+def rotate_vector(pitch_deg, yaw_deg, vector):
+    """Rotate a vector by pitch (x-axis) and yaw (z-axis)."""
+    pitch = math.radians(pitch_deg)
+    yaw = math.radians(yaw_deg)
+
+    x, y, z = vector
+
+    # Pitch rotation (around X-axis)
+    y1 = y * math.cos(pitch) - z * math.sin(pitch)
+    z1 = y * math.sin(pitch) + z * math.cos(pitch)
+    x1 = x
+
+    # Yaw rotation (around Z-axis)
+    x2 = x1 * math.cos(yaw) - y1 * math.sin(yaw)
+    y2 = x1 * math.sin(yaw) + y1 * math.cos(yaw)
+    z2 = z1
+
+    return [x2, y2, z2]
+
+def intersect_ground(ray_world, altitude_m):
+    """
+    Intersect a ray with the ground plane z=0, assuming camera is at height = altitude_m.
+    Returns (dx, dy): ground intersection in meters.
+    """
+    dx, dy, dz = ray_world
+    if dz == 0:
+        raise ValueError("Ray is parallel to the ground")
+    t = -altitude_m / dz  # Solve for z = 0
+    return dx * t, dy * t
+
+def compute_object_gps(center_lat, center_lon, altitude_m, image_width, image_height,
+                       object_x, object_y, hfov_deg, dfov_deg, pitch_deg, yaw_deg):
+    # Compute vertical FOV from diagonal FOV and image aspect ratio
+    aspect_ratio = image_width / image_height
+    hfov_rad = math.radians(hfov_deg)
+    dfov_rad = math.radians(dfov_deg)
+    vfov_rad = 2 * math.atan(math.tan(dfov_rad / 2) / math.sqrt(1 + aspect_ratio**2))
+    vfov_deg = math.degrees(vfov_rad)
+
+    # Step 1: Get ray in camera frame
+    ray_camera = pixel_to_camera_ray(object_x, object_y, image_width, image_height, hfov_deg, vfov_deg)
+
+    # Step 2: Rotate ray to world coordinates
+    ray_world = rotate_vector(pitch_deg, yaw_deg, ray_camera)
+
+    # Step 3: Intersect ray with ground plane
+    dx_m, dy_m = intersect_ground(ray_world, altitude_m)
+
+    # Step 4: Convert (dx, dy) in meters to GPS offset
+    point_north = geodesic(meters=dy_m).destination((center_lat, center_lon), 0)
+    point_east = geodesic(meters=dx_m).destination(point_north, 90)
+
+    return point_east.latitude, point_east.longitude
+
+
+#For Yaw Variation
+def pixel_to_ground_offset(x, y, image_width, image_height, hfov_deg, dfov_deg, altitude_m):
+    """
+    Convert pixel coordinates to ground offsets (dx, dy) in meters before rotation.
+    """
+    aspect_ratio = image_width / image_height
+
+    # Compute vertical FOV from diagonal FOV
+    hfov_rad = math.radians(hfov_deg)
+    dfov_rad = math.radians(dfov_deg)
+    vfov_rad = 2 * math.atan(math.tan(dfov_rad / 2) / math.sqrt(1 + aspect_ratio**2))
+
+    # Image physical dimensions on the ground at given altitude
+    width_m = 2 * altitude_m * math.tan(hfov_rad / 2)
+    height_m = 2 * altitude_m * math.tan(vfov_rad / 2)
+
+    # Meters per pixel
+    m_per_px_x = width_m / image_width
+    m_per_px_y = height_m / image_height
+
+    # Pixel offsets from center
+    dx_px = x - image_width / 2
+    dy_px = y - image_height / 2
+
+    # Convert to meters (note: y axis points down in images, so dy_px is positive = south)
+    dx_m = dx_px * m_per_px_x
+    dy_m = dy_px * m_per_px_y
+
+    return dx_m, dy_m
+
+def rotate_offset_by_yaw(dx_m, dy_m, yaw_deg):
+    """
+    Rotate the ground offset vector by yaw angle (clockwise from North).
+    """
+    yaw_rad = math.radians(yaw_deg)
+    dx_rot = dx_m * math.cos(yaw_rad) - dy_m * math.sin(yaw_rad)
+    dy_rot = dx_m * math.sin(yaw_rad) + dy_m * math.cos(yaw_rad)
+    return dx_rot, dy_rot
+
+def compute_object_gps_with_yaw(center_lat, center_lon, altitude_m, image_width, image_height,
+                                object_x, object_y, hfov_deg, dfov_deg, yaw_deg):
+    # Step 1: Compute flat-Earth dx/dy from center in meters
+    dx_m, dy_m = pixel_to_ground_offset(object_x, object_y, image_width, image_height,
+                                        hfov_deg, dfov_deg, altitude_m)
+
+    # Step 2: Apply yaw rotation
+    dx_rot, dy_rot = rotate_offset_by_yaw(dx_m, dy_m, yaw_deg)
+
+    # Step 3: Convert local offsets to GPS coordinates
+    point_north = geodesic(meters=dy_rot).destination((center_lat, center_lon), 0)
+    point_east = geodesic(meters=dx_rot).destination(point_north, 90)
+
+    return point_east.latitude, point_east.longitude
+
+def calculate_object_gps_cam_params_with_yaw(
+    center_lat, center_lon,
+    object_x, object_y,
+    image_width, image_height,
+    altitude_m,
+    hfov_deg, dfov_deg,
+    yaw_deg,
+    focal_length_mm=5.2,
+    sensor_width_mm=5.37, sensor_height_mm=4.04, #1/2.7 in sensor
+    aperture_f=1.8 #F1.8-F2.5
+):
+    """
+    Calculates GPS coordinates of an object in an aerial nadir image.
+
+    Parameters:
+    - center_lat, center_lon: GPS coordinates of image center.
+    - object_x, object_y: Pixel coordinates of object in the image.
+    - center_x, center_y: Pixel coordinates of image center (image resolution / 2).
+    - altitude_m: Drone or plane altitude in meters.
+    - hfov_deg: Horizontal field of view of the camera in degrees.
+    - dfov_deg: Diagonal field of view of the camera in degrees.
+
+    Returns:
+    - (lat, lon): GPS coordinates of the object.
+    """
+
+    hfov_deg, vfov_deg = compute_fov(sensor_width_mm, sensor_height_mm, focal_length_mm)
+    
+    # Calculate width and height in meters on the ground
+    hfov_rad = math.radians(hfov_deg)
+    vfov_rad = math.radians(vfov_deg)
+
+    width_m = 2 * altitude_m * math.tan(hfov_rad / 2)
+    height_m = 2 * altitude_m * math.tan(vfov_rad / 2)
+
+    # Convert pixel coordinates to meters
+    m_per_px_x = width_m / image_width
+    m_per_px_y = height_m / image_height
+
+    dx_px = object_x - image_width / 2
+    dy_px = object_y - image_height / 2
+
+    dx_m = dx_px * m_per_px_x
+    dy_m = dy_px * m_per_px_y
+
+    # Convert from local dx, dy in meters to GPS
+    # dx_m = East/West, dy_m = North/South
+    # dy_m north is negative (image y grows downward)
+    north_offset = -dy_m
+    east_offset = dx_m
+
+    # Rotate ground offset by yaw
+    dx_rot, dy_rot = rotate_offset_by_yaw(dx_m, dy_m, yaw_deg)
+
+    # Project rotated offset to GPS
+    point_north = geodesic(meters=dy_rot).destination((center_lat, center_lon), 0)
+    point_east = geodesic(meters=dx_rot).destination(point_north, 90)
+
+    return point_east.latitude, point_east.longitude

@@ -59,4 +59,5 @@ while True:
 
 # Release the video capture object and close all OpenCV windows
 cap.release()
+vid_matches.release()
 cv2.destroyAllWindows()
