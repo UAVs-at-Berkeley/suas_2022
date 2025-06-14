@@ -202,14 +202,25 @@ if not cap.isOpened():
 if show_stream:
     rtmp = RTMP.RTMPSender(rtmp_url)
     rtmp.start()
-
+fps = int(cap.get(cv2.CAP_PROP_FPS))
+if fps <= 0 or fps > 120:
+    fps = 30  # default fallback
 if vid_mapping:
-    video_maker = cv2.VideoWriter('mappingfull.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+    video_maker = cv2.VideoWriter('mappingfull.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (int(cap.get(3)), int(cap.get(4))))
 
 if show_stream:
     ret, frame = cap.read()
-    rtmp.setFrame(frame)
-    imcap.image_save(frame)
+    if ret:
+        rtmp.setFrame(frame)
+        imcap.image_save(frame)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        continue
+    if frame.mean() > 10:  # Image is probably dark/gray
+        print("Frame is now active")
+        break
 
 #Wait until vehicle is armable
 counter = 0
@@ -221,6 +232,8 @@ while not vehicle.is_armable:
     counter += 1
     if show_stream:
             ret, frame = cap.read()
+            if not ret:
+                continue
             rtmp.setFrame(frame)
 
     if KeyboardInterrupt:
@@ -239,25 +252,32 @@ while vehicle.mode != VehicleMode("AUTO"):
     time.sleep(3)
 
 print("Entered AUTO mode")
-
+ct = 0
 try:
     while True:
         nextwaypoint=vehicle.commands.next
-        frame = None
         waypoint = utils.getCurrentWaypoint(vehicle)
         if nextwaypoint == lastwaypoint:
             break
-        while nextwaypoint >= 8:
+        while nextwaypoint >= 0:
             ret, frame = cap.read()
+            ct += 1
             if not ret:
+                continue
+            if ct < 10:
                 continue
             if show_stream:
                 rtmp.setFrame(frame)
                 cv2.imwrite(f'{PATH_OF_SCRIPT}/{str(waypoint.lat)}_{str(waypoint.lon)}.jpg', frame)
                 rtmp.setFrame(frame)
+                ct = 0
+                if vid_mapping:
+                    video_maker.write(frame)
+                    ct = 0  
                 break
             if vid_mapping:
-                video_maker.write(frame)  
+                video_maker.write(frame)
+                ct = 0  
                 break    
 
         print('Distance to waypoint (%s): %s' % (nextwaypoint, utils.distance_to_current_waypoint(vehicle)))
