@@ -340,6 +340,23 @@ def distance_to_current_waypoint(vehicle):
     distancetopoint = get_distance_metres(vehicle.location.global_frame, targetWaypointLocation)
     return distancetopoint
 
+def distance_to_current_waypoint(vehicle):
+    """
+    Gets distance in metres to the current waypoint. 
+    It returns None for the first waypoint (Home location).
+    """
+    nextwaypoint = vehicle.commands.next
+    if nextwaypoint==0:
+        return None
+
+    missionitem=vehicle.commands[nextwaypoint] #commands are zero indexed
+    lat = missionitem.x
+    lon = missionitem.y
+    alt = missionitem.z
+    targetWaypointLocation = LocationGlobalRelative(lat,lon,alt)
+    distancetopoint = get_distance_metres(vehicle.location.global_frame, targetWaypointLocation)
+    return distancetopoint
+
 def getCurrentWaypoint(vehicle):
     nextwaypoint = vehicle.commands.next
     if nextwaypoint==0:
@@ -383,6 +400,14 @@ def addSetYawCommand(cmds, yaw_angle, yaw_speed=0, direction=0, relative=0):
 # command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, num, state, 0, 0, 0, 0, 0)
 def setServo(vehicle, num, state):
     msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, num, state, 0, 0, 0, 0, 0)
+    vehicle.send_mavlink(msg)
+
+# Here is an example and the command format for the mavlink message that is immediate, not being added to a mission list, we are using the set servo described here: https://mavlink.io/en/messages/common.html#MAV_CMD_DO_SET_SERVO
+#               <SYSTEM ID> <COMPONENT ID> <COMMAND> <CONFIRMATION> <PARAM1> <PARAM2> <PARAM3> <PARAM4> <PARAM5> <PARAM6> <PARAM7>
+# command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, num, state, 0, 0, 0, 0, 0)
+# Setting state=1 turns relay on, state=0 turns relay off
+def setRelay(vehicle, num, state=1):
+    msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_RELAY, 0, num, state, 0, 0, 0, 0, 0)
     vehicle.send_mavlink(msg)
 
 def setYaw(vehicle, heading, relative=False):
