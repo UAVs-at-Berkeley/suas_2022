@@ -170,12 +170,14 @@ framect = 0
 relaydrop = 0
 with open(output_file, "w") as file:
     file.write("EPSG:4326\n")
-vid_matches = cv2.VideoWriter('mapping7.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
-yolo_matches = cv2.VideoWriter('yolo_matches.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+vid_matches = cv2.VideoWriter('mappin9.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+yolo_matches = cv2.VideoWriter('yolo_match9.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
 while nextwaypoint < lastwaypoint-1:
     ret, frame = cap.read()
     ct += 1
     nextct += 1
+    if nextwaypoint == lastwaypoint:
+        break
     waypoint = utils.getCurrentWaypoint(vehicle)
     if (ct >= 10):
         ct = 0
@@ -213,6 +215,7 @@ while nextwaypoint < lastwaypoint-1:
                 if class_name == "Person-Mannequin" and relaydrop < 2 and conf > 0.5:
                     utils.setRelay(vehicle=vehicle, num=relaydrop, state=1)
                     relaydrop+=1
+    nextwaypoint=vehicle.commands.next
 
 
 

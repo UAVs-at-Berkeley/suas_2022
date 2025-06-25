@@ -172,8 +172,8 @@ framect = 0
 relaydrop = 0
 with open(output_file, "w") as file:
     file.write("EPSG:4326\n")
-vid_matches = cv2.VideoWriter('mapping10.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
-yolo_matches = cv2.VideoWriter('yolo_matches4.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+vid_matches = cv2.VideoWriter('mappi10.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+yolo_matches = cv2.VideoWriter('yolo_matc4.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
 foundobjects = {}
 while nextwaypoint < lastwaypoint-1:
     ret, frame = cap.read()
@@ -214,9 +214,9 @@ while nextwaypoint < lastwaypoint-1:
             yolo_matches.write(annotated_frame)
 
             for result in results[0].boxes:
-                #xcenter, ycenter, width, height = result.xywh[0].tolist()
-                #xcenter=round(xcenter)
-                #ycenter=round(ycenter)
+                xcenter, ycenter, width, height = result.xywh[0].tolist()
+                xcenter=round(xcenter)
+                ycenter=round(ycenter)
                 conf = result.conf[0].item()
                 class_index = result.cls[0].item()
                 class_name = results[0].names[int(class_index)]
@@ -226,9 +226,20 @@ while nextwaypoint < lastwaypoint-1:
                     print("Object Found")
                     if class_name in foundobjects:
                         foundobjects[class_name] = foundobjects.get(class_name) + 1
-                        utils.setRelay(vehicle=vehicle, num=relaydrop, state=1)
-                        print("Payload Dropped")
-                        relaydrop+=1
+                        
+                        drop_lat, drop_lon = utils.calculate_object_gps_cam_params_with_yaw(location.lat, location.lon, xcenter, ycenter, 1088, 1088, location.alt, yaw_deg=)
+                        drop_location = LocationGlobalRelative(drop_lat, drop_lon, 50)
+                        vehicle.mode = VehicleMode("GUIDED")
+
+                        # Set the LocationGlobal to head towards
+                        if utils.get_distance_metres(vehicle.location.global_frame, drop_location) < 30:
+                            vehicle.simple_goto(drop_location)
+                            while utils.get_distance_metres(vehicle.location.global_frame, drop_location) > 10:
+                                print("Going to drop")
+                            utils.setRelay(vehicle=vehicle, num=relaydrop, state=1)
+                            print("Payload Dropped")
+                            relaydrop+=1
+                            vehicle.mode = VehicleMode("AUTO")
                     else:
                         foundobjects[class_name] = 1
     nextwaypoint=vehicle.commands.next
