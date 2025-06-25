@@ -11,6 +11,7 @@ import image_capture_modified as imcap
 import RTMP
 from video_maker import VideoMaker
 import os
+from ultralytics import YOLO
 
 PATH_OF_SCRIPT = os.path.dirname(os.path.abspath(__file__))
 
@@ -54,6 +55,9 @@ rtmp = None
 video_maker = None
 
 output_file = "geo.txt"
+
+model = YOLO("best.onnx")
+#model = YOLO("yolo11n.pt")
 
 #if no connection string start sitl
 if not connection_string:
@@ -118,8 +122,10 @@ counter = 0
 ct = 0
 nextct = 0
 vehicle.gimbal.rotate(-90, 0, 0)
+utils.setRelay(vehicle=vehicle, num=0, state=0)
+utils.setRelay(vehicle=vehicle, num=1, state=0)
 nextwaypoint=vehicle.commands.next
-while nextwaypoint < 8:
+while nextwaypoint < 5:
 
     waypoint = utils.getCurrentWaypoint(vehicle)
     nextct += 1
@@ -161,21 +167,19 @@ while nextwaypoint < 8:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 ct = 0
+yt=0
 nextct = 0
 framect = 0
+relaydrop = 0
 with open(output_file, "w") as file:
     file.write("EPSG:4326\n")
-vid_matches = cv2.VideoWriter('mapping6.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
-while nextwaypoint < lastwaypoint-2:
+vid_matches = cv2.VideoWriter('mapping9.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+yolo_matches = cv2.VideoWriter('yolo_matches3.mp4', cv2.VideoWriter_fourcc(*'mp4v'), int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+while nextwaypoint < lastwaypoint-1:
     ret, frame = cap.read()
     ct += 1
     nextct += 1
     waypoint = utils.getCurrentWaypoint(vehicle)
-    location = vehicle.location.global_frame
-    if nextwaypoint == 12 and utils.distance_to_current_waypoint(vehicle) < 10:
-        utils.setRelay(vehicle, 0, 1)
-    if nextwaypoint == 15 and utils.distance_to_current_waypoint(vehicle) < 10:
-        utils.setRelay(vehicle, 1, 1)
     if (ct >= 10):
         ct = 0
         if not ret:
@@ -191,12 +195,32 @@ while nextwaypoint < lastwaypoint-2:
         # Draw keypoints on the frame
         
         with open(output_file, "a") as f:
-            f.write(f"frame_{framect}.png {str(location.lon)} {str(location.lat)} {str(location.alt)}\n")
+            if waypoint != None:
+                f.write(f"frame_{framect}.png {str(waypoint.lon)} {str(waypoint.lat)} {str(waypoint.alt)}\n")
 
 
         framect += 1
         # Display the resulting frame
         vid_matches.write(frame)
+
+        if nextwaypoint < 15:
+            results = model(frame)
+            annotated_frame = results[0].plot()
+
+            yolo_matches.write(annotated_frame)
+
+            for result in results[0].boxes:
+                #x1, y1, x2, y2 = results.ayay[0].tolist()
+                conf = result.conf[0].item()
+                class_index = result.cls[0].item()
+                class_name = results[0].names[int(class_index)]
+                print(class_name)
+                print(relaydrop)
+                if class_name == "Person-Mannequin" and relaydrop < 2 and conf > 0.5:
+                    print("dropped")
+                    utils.setRelay(vehicle=vehicle, num=relaydrop, state=1)
+                    relaydrop+=1
+
 
 
 while vehicle.armed:
@@ -206,6 +230,7 @@ while vehicle.armed:
 # Release the video capture object and close all OpenCV windows
 cap.release()
 vid_matches.release()
+yolo_matches.release()
 cv2.destroyAllWindows()
 
 print("Close vehicle object")

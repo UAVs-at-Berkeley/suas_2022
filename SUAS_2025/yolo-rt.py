@@ -1,12 +1,14 @@
 import cv2
 from ultralytics import YOLO
 
-model = YOLO("best.pt")
-model.export(format="engine", half=True)
+model = YOLO("final.pt")
+#model.export(format="onnx")
+model.export(format="engine", imgsz=1088, int8=True, data='datasets/data.yaml')
 
-trt_model = YOLO("best.engine")
+#trt_model = YOLO("best.onnx")
+trt_model = YOLO("final.engine")
 
-video_path = "mapping5.mp4"  # Replace with your video file path
+video_path = "mapping9.mp4"  # Replace with your video file path
 cap = cv2.VideoCapture(video_path)
 
 while True:
